@@ -859,7 +859,12 @@ function fitPlaced(){
 async function loadRemote(){
   try{
     const res=await fetch('terrain.json',{cache:'no-store'}); if(!res.ok) return;
-    const s=await res.json(); if(!s||!Array.isArray(s.targets)||!s.publie) return;
+    const s=await res.json(); if(!s||!Array.isArray(s.targets)) return;
+    /* Fichier exporte sans date de publication : on prend la date du fichier sur le serveur */
+    if(!s.publie){
+      const lm=res.headers.get('Last-Modified');
+      s.publie=lm&&!isNaN(new Date(lm))?new Date(lm).toISOString():new Date(0).toISOString();
+    }
     if(state.publie&&new Date(s.publie)<=new Date(state.publie)) return;
     const hadView=!!state.view, v=state.view;
     Object.keys(layers).forEach(dropLayers);
