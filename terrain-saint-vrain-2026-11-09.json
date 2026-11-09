@@ -1,0 +1,514 @@
+{
+ "targets": [
+  {
+   "id": "t1",
+   "cible": null,
+   "pas": null,
+   "zCible": null,
+   "zPas": null,
+   "n": "1",
+   "buttes": "1",
+   "taille": "90",
+   "dAct": "30",
+   "dEnv": "35",
+   "faire": "Nettoyage pour tirer à 35m",
+   "reparer": "- Toiture cible"
+  },
+  {
+   "id": "t2",
+   "cible": null,
+   "pas": null,
+   "zCible": null,
+   "zPas": null,
+   "n": "2",
+   "buttes": "1",
+   "taille": "90",
+   "dAct": "40",
+   "dEnv": "50",
+   "faire": "Nettoyage allée + possibilité de reculé la cible + en profondeur",
+   "reparer": "- Refaire arétoire flèche\n- Filet\n- Voir amélioration possible"
+  },
+  {
+   "id": "t3",
+   "cible": null,
+   "pas": null,
+   "zCible": null,
+   "zPas": null,
+   "n": "3",
+   "buttes": "1",
+   "taille": "130",
+   "dAct": "55",
+   "dEnv": "60",
+   "faire": "Jambe de force voute + taille normale allée",
+   "reparer": "- Cible à réparer\n- Sangles\n- Démontage cible\n- Toiture cible"
+  },
+  {
+   "id": "t4",
+   "cible": null,
+   "pas": null,
+   "zCible": null,
+   "zPas": null,
+   "n": "4",
+   "buttes": "2",
+   "taille": "60",
+   "dAct": "15",
+   "dEnv": "15",
+   "faire": "Nettoyage classique",
+   "reparer": "- Réaligner bande de mousse piquet rouge"
+  },
+  {
+   "id": "t5",
+   "cible": null,
+   "pas": null,
+   "zCible": null,
+   "zPas": null,
+   "n": "5",
+   "buttes": "1",
+   "taille": "90",
+   "dAct": "30",
+   "dEnv": "35",
+   "faire": "Nettoyage classique + coupe arbre",
+   "reparer": "RAS"
+  },
+  {
+   "id": "t6",
+   "cible": null,
+   "pas": null,
+   "zCible": null,
+   "zPas": null,
+   "n": "6",
+   "buttes": "1",
+   "taille": "130",
+   "dAct": "50",
+   "dEnv": "50",
+   "faire": "RAS",
+   "reparer": "- Toiture cible"
+  },
+  {
+   "id": "t7",
+   "cible": null,
+   "pas": null,
+   "zCible": null,
+   "zPas": null,
+   "n": "7",
+   "buttes": "1",
+   "taille": "90",
+   "dAct": "38",
+   "dEnv": "38",
+   "faire": "RAS",
+   "reparer": "RAS"
+  },
+  {
+   "id": "t8",
+   "cible": null,
+   "pas": null,
+   "zCible": null,
+   "zPas": null,
+   "n": "8",
+   "buttes": "1",
+   "taille": "130",
+   "dAct": "40",
+   "dEnv": "40",
+   "faire": "Nettoyage classique",
+   "reparer": "- Toiture cible\n- Sangles"
+  },
+  {
+   "id": "t9",
+   "cible": null,
+   "pas": null,
+   "zCible": null,
+   "zPas": null,
+   "n": "9",
+   "buttes": "1",
+   "taille": "90",
+   "dAct": "35",
+   "dEnv": "35",
+   "faire": "Nettoyage",
+   "reparer": "Toiture cible"
+  },
+  {
+   "id": "t10",
+   "cible": null,
+   "pas": null,
+   "zCible": null,
+   "zPas": null,
+   "n": "10",
+   "buttes": "1",
+   "taille": "90",
+   "dAct": "36",
+   "dEnv": "40",
+   "faire": "Nettoyage",
+   "reparer": "- Possibilité 40m\n- Sangles à revoir"
+  },
+  {
+   "id": "t11",
+   "cible": null,
+   "pas": null,
+   "zCible": null,
+   "zPas": null,
+   "n": "11",
+   "buttes": "1",
+   "taille": "130",
+   "dAct": "60",
+   "dEnv": "60",
+   "faire": "Nettoyage",
+   "reparer": "- Sangle\n- Renforcer structure bois"
+  },
+  {
+   "id": "t12",
+   "cible": null,
+   "pas": null,
+   "zCible": null,
+   "zPas": null,
+   "n": "12",
+   "buttes": "1",
+   "taille": "90",
+   "dAct": "35",
+   "dEnv": "35",
+   "faire": "RAS",
+   "reparer": "RAS"
+  },
+  {
+   "id": "t13",
+   "cible": null,
+   "pas": null,
+   "zCible": null,
+   "zPas": null,
+   "n": "13",
+   "buttes": "2",
+   "taille": "60",
+   "dAct": "15",
+   "dEnv": "15",
+   "faire": "RAS",
+   "reparer": "- Bleu -> Toiture\n- Rouge -> Palette\n- Disquer barre de fer ponton"
+  },
+  {
+   "id": "t14",
+   "cible": null,
+   "pas": null,
+   "zCible": null,
+   "zPas": null,
+   "n": "14",
+   "buttes": "2",
+   "taille": "90",
+   "dAct": "20",
+   "dEnv": "20",
+   "faire": "RAS",
+   "reparer": "- Rouge -> Sangle + toiture\n- Bleu -> Toiture cible + réviser système de poulie"
+  },
+  {
+   "id": "t15",
+   "cible": null,
+   "pas": null,
+   "zCible": null,
+   "zPas": null,
+   "n": "15",
+   "buttes": "1",
+   "taille": "130",
+   "dAct": "60",
+   "dEnv": "60",
+   "faire": "RAS",
+   "reparer": "RAS"
+  },
+  {
+   "id": "t16",
+   "cible": null,
+   "pas": null,
+   "zCible": null,
+   "zPas": null,
+   "n": "16",
+   "buttes": "1",
+   "taille": "90",
+   "dAct": "25",
+   "dEnv": "25",
+   "faire": "- Création d'un autre axe de tir",
+   "reparer": "RAS"
+  },
+  {
+   "id": "t17",
+   "cible": null,
+   "pas": null,
+   "zCible": null,
+   "zPas": null,
+   "n": "17",
+   "buttes": "1",
+   "taille": "90",
+   "dAct": "45",
+   "dEnv": "45",
+   "faire": "RAS",
+   "reparer": "- Centre lamelle à changer"
+  },
+  {
+   "id": "t18",
+   "cible": null,
+   "pas": null,
+   "zCible": null,
+   "zPas": null,
+   "n": "17 bis",
+   "buttes": "1",
+   "taille": "130?",
+   "dAct": "?",
+   "dEnv": "60-70",
+   "faire": "- Dégager autour du H\n- Cible 70 m Sébastien",
+   "reparer": "-Mettre une cible"
+  },
+  {
+   "id": "t19",
+   "cible": null,
+   "pas": null,
+   "zCible": null,
+   "zPas": null,
+   "n": "18",
+   "buttes": "1",
+   "taille": "90",
+   "dAct": "20",
+   "dEnv": "?",
+   "faire": "- A déplacer\nPas de grand intéret actuellement",
+   "reparer": "RAS"
+  },
+  {
+   "id": "t20",
+   "cible": null,
+   "pas": null,
+   "zCible": null,
+   "zPas": null,
+   "n": "19",
+   "buttes": "1",
+   "taille": "130",
+   "dAct": "40",
+   "dEnv": "45",
+   "faire": "RAS",
+   "reparer": "- Revoir structure bois"
+  },
+  {
+   "id": "t21",
+   "cible": null,
+   "pas": null,
+   "zCible": null,
+   "zPas": null,
+   "n": "20",
+   "buttes": "1",
+   "taille": "90",
+   "dAct": "20",
+   "dEnv": "30-35",
+   "faire": "- Refaire chemin",
+   "reparer": "- Transferer cible sur butte de terre"
+  },
+  {
+   "id": "t22",
+   "cible": null,
+   "pas": null,
+   "zCible": null,
+   "zPas": null,
+   "n": "21",
+   "buttes": "1",
+   "taille": "90",
+   "dAct": "30",
+   "dEnv": "35",
+   "faire": "RAS",
+   "reparer": "- Possibilité de déplacer la cible plus haut au niveau du lanceur"
+  },
+  {
+   "id": "t23",
+   "cible": null,
+   "pas": null,
+   "zCible": null,
+   "zPas": null,
+   "n": "22",
+   "buttes": "1",
+   "taille": "90",
+   "dAct": "30",
+   "dEnv": "40",
+   "faire": "- Escaliers à faire",
+   "reparer": "- Retendre sangle\n- Alignement bandes de mousses"
+  },
+  {
+   "id": "t24",
+   "cible": null,
+   "pas": null,
+   "zCible": null,
+   "zPas": null,
+   "n": "23",
+   "buttes": "1",
+   "taille": "90",
+   "dAct": "?",
+   "dEnv": "?",
+   "faire": "- Accès trop compliqué\n- Déplacer cette cible",
+   "reparer": "RAS"
+  },
+  {
+   "id": "t25",
+   "cible": null,
+   "pas": null,
+   "zCible": null,
+   "zPas": null,
+   "n": "24",
+   "buttes": "3",
+   "taille": "90",
+   "dAct": "?",
+   "dEnv": "?",
+   "faire": "- Tout à refaire\n- Chemin\n- Arbre etc",
+   "reparer": "RAS"
+  }
+ ],
+ "perimetre": [
+  [
+   48.5963022218634,
+   2.3162941475862335
+  ],
+  [
+   48.596156679228976,
+   2.316127246066149
+  ],
+  [
+   48.59584802708227,
+   2.3158768937860024
+  ],
+  [
+   48.5953712436373,
+   2.3156341279385777
+  ],
+  [
+   48.59501490780876,
+   2.3154065349565967
+  ],
+  [
+   48.59467864493329,
+   2.3152282537874096
+  ],
+  [
+   48.59472632413388,
+   2.3150385929691186
+  ],
+  [
+   48.59486685204234,
+   2.3147541017416633
+  ],
+  [
+   48.59495719120565,
+   2.3143975394032483
+  ],
+  [
+   48.594962210043306,
+   2.314359607239598
+  ],
+  [
+   48.59464100342733,
+   2.3140751160121424
+  ],
+  [
+   48.59461841851031,
+   2.3140864956612455
+  ],
+  [
+   48.594560701454256,
+   2.3144620240814855
+  ],
+  [
+   48.59453560706148,
+   2.3148375525017255
+  ],
+  [
+   48.5940111314002,
+   2.3145303019760637
+  ],
+  [
+   48.59394337577414,
+   2.3145454748415077
+  ],
+  [
+   48.59386307269223,
+   2.3150272133200156
+  ],
+  [
+   48.593802845297034,
+   2.315440673903906
+  ],
+  [
+   48.59374261783007,
+   2.315785856593218
+  ],
+  [
+   48.59371561024154,
+   2.3159372806549077
+  ],
+  [
+   48.593657052672185,
+   2.3160955309867863
+  ],
+  [
+   48.59357542685626,
+   2.31625646352768
+  ],
+  [
+   48.593445889964634,
+   2.316481769084931
+  ],
+  [
+   48.59335006794069,
+   2.3166614770889287
+  ],
+  [
+   48.59332167619499,
+   2.3167848587036137
+  ],
+  [
+   48.5932808630326,
+   2.3168921470642094
+  ],
+  [
+   48.59319036416358,
+   2.317203283309937
+  ],
+  [
+   48.593534558943134,
+   2.317504183606976
+  ],
+  [
+   48.59392101886671,
+   2.317762122319884
+  ],
+  [
+   48.59430245693153,
+   2.318001094950928
+  ],
+  [
+   48.59464374118012,
+   2.31830834547659
+  ],
+  [
+   48.595090116897396,
+   2.3177665472030644
+  ],
+  [
+   48.595345633090474,
+   2.3179596662521367
+  ],
+  [
+   48.59567889791355,
+   2.3176860809326176
+  ],
+  [
+   48.59581080567974,
+   2.317530736121563
+  ],
+  [
+   48.59594254777738,
+   2.3172367618531946
+  ]
+ ],
+ "settings": {
+  "profondeur": 50,
+  "demiLargeur": 10,
+  "ouverture": 10,
+  "tolerance": 2,
+  "showZones": true
+ },
+ "view": {
+  "c": [
+   48.59451146043066,
+   2.3184907436370854
+  ],
+  "z": 18
+ }
+}
