@@ -155,7 +155,7 @@ button{cursor:pointer}
         <button type="button" data-exp="kml">Exporter pour Google Earth (.kml)</button>
         <button type="button" data-exp="geojson">Exporter en GeoJSON</button>
         <button type="button" data-exp="csv">Exporter le tableau (.csv)</button>
-        <button type="button" data-exp="json">Sauvegarder le projet (.json)</button>
+        <button type="button" data-exp="json">Publier les données du club (terrain.json)</button>
         <hr>
         <button type="button" id="btn-import">Importer un projet ou un CSV du Google Sheet</button>
       </div>
@@ -788,7 +788,11 @@ function exportCSV(){
 document.querySelectorAll('[data-exp]').forEach(b=>b.addEventListener('click',()=>{
   const k=b.dataset.exp; $('#menu').open=false;
   if(k==='kml') exportKML(); else if(k==='geojson') exportGeoJSON(); else if(k==='csv') exportCSV();
-  else download('terrain-saint-vrain-'+stamp()+'.json','application/json',JSON.stringify(state,null,1));
+  else{
+    state.publie=new Date().toISOString(); save(); showPublie();
+    download('terrain.json','application/json',JSON.stringify(state,null,1));
+    toast('Déposez terrain.json dans le dépôt GitHub, à côté de index.html, pour le diffuser.');
+  }
 }));
 $('#btn-import').addEventListener('click',()=>{$('#menu').open=false;$('#file').click();});
 
@@ -842,10 +846,35 @@ $('#file').addEventListener('change',async e=>{
 
 /* ---------- Demarrage ---------- */
 function renderAll(){redrawAll();renderList();renderDetail();}
-drawPerim(); renderAll();
-$('#saved').textContent=state.targets.some(t=>t.cible)?'Enregistré sur cet appareil':'Inventaire du 08/11 chargé';
-const firstPlaced=state.targets.filter(t=>t.cible||t.pas);
-if(!state.view&&firstPlaced.length){map.fitBounds(L.latLngBounds(firstPlaced.flatMap(t=>[t.cible,t.pas].filter(Boolean))).pad(0.2));}
+function showPublie(){
+  $('#saved').textContent=state.publie?'Données du club du '+new Date(state.publie).toLocaleDateString('fr-FR'):
+    (state.targets.some(t=>t.cible)?'Enregistré sur cet appareil':'Inventaire du 08/11 chargé');
+}
+function fitPlaced(){
+  const pts=state.targets.flatMap(t=>[t.cible,t.pas].filter(Boolean));
+  if(pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.2));
+}
+/* Donnees de reference publiees a cote de la page (terrain.json dans le depot GitHub).
+   Elles remplacent les donnees locales uniquement si elles sont plus recentes. */
+async function loadRemote(){
+  try{
+    const res=await fetch('terrain.json',{cache:'no-store'}); if(!res.ok) return;
+    const s=await res.json(); if(!s||!Array.isArray(s.targets)||!s.publie) return;
+    if(state.publie&&new Date(s.publie)<=new Date(state.publie)) return;
+    const hadView=!!state.view, v=state.view;
+    Object.keys(layers).forEach(dropLayers);
+    state=normalize(s); state.view=v; sel=null; save();
+    ['#s-prof','#s-larg','#s-ouv','#s-tol'].forEach((id,i)=>{$(id).value=state.settings[['profondeur','demiLargeur','ouverture','tolerance'][i]];});
+    $('#s-zones').checked=state.settings.showZones;
+    drawPerim(); renderAll(); showPublie();
+    if(!hadView) fitPlaced();
+    toast('Données du club mises à jour ('+new Date(s.publie).toLocaleDateString('fr-FR')+')');
+  }catch(e){/* pas de terrain.json (fichier ouvert en local) : on garde les donnees de l'appareil */}
+}
+
+drawPerim(); renderAll(); showPublie();
+if(!state.view) fitPlaced();
+loadRemote();
 })();
 </script>
 </body>
