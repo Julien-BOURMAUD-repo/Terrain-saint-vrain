@@ -61,6 +61,15 @@ button{cursor:pointer}
 .menu-pop button:hover{background:var(--soft)}
 .menu-pop hr{border:0;border-top:1px solid var(--line);margin:4px 0}
 .saved{font-size:12px;color:var(--muted)}
+.saved.attente{color:var(--warn);font-weight:600}
+.lecture .edit-only,.sync .nosync{display:none!important}
+.acces-pop{min-width:270px}
+.acces-pop form,#acces-on{display:flex;flex-direction:column;gap:10px;padding:6px}
+.acces-pop label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.acces-pop input{height:36px;border:1px solid var(--line);border-radius:6px;background:var(--soft);padding:0 10px;color:var(--ink)}
+.acces-pop .btn{justify-content:center;text-align:center;padding:0 12px}
+.acces-pop .btn:not(.primary){border:1px solid var(--line)}
+.acc-who{margin:0;font-weight:600}
 
 .side{grid-area:side;overflow:auto;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-width:0}
 .pad{padding-left:16px;padding-right:16px}
@@ -169,16 +178,32 @@ button{cursor:pointer}
       <ul id="results" class="results" hidden></ul>
     </div>
     <button class="btn" id="btn-gps" type="button">Ma position</button>
-    <button class="btn" id="btn-perim" type="button">Tracer le périmètre</button>
+    <button class="btn edit-only" id="btn-perim" type="button">Tracer le périmètre</button>
     <details class="menu" id="menu">
       <summary class="btn">Données</summary>
       <div class="menu-pop">
         <button type="button" data-exp="kml">Exporter pour Google Earth (.kml)</button>
         <button type="button" data-exp="geojson">Exporter en GeoJSON</button>
         <button type="button" data-exp="csv">Exporter le tableau (.csv)</button>
-        <button type="button" data-exp="json">Publier les données du club (terrain.json)</button>
+        <button type="button" data-exp="json" class="nosync">Publier les données du club (terrain.json)</button>
         <hr>
-        <button type="button" id="btn-import">Importer un projet ou un CSV du Google Sheet</button>
+        <button type="button" id="btn-import" class="edit-only">Importer un projet ou un CSV du Google Sheet</button>
+        <button type="button" id="btn-restore" class="edit-only" hidden>Ajouter mes placements d'avant la synchronisation</button>
+      </div>
+    </details>
+    <details class="menu" id="acces" hidden>
+      <summary class="btn" id="acces-btn">Modifier</summary>
+      <div class="menu-pop acces-pop">
+        <form id="acces-form">
+          <label>Code d'édition<input id="acc-code" type="password" autocomplete="current-password" required></label>
+          <label>Votre prénom<input id="acc-nom" type="text" autocomplete="given-name" maxlength="40" placeholder="Pour savoir qui a modifié quoi"></label>
+          <button class="btn primary" type="submit">Activer l'édition</button>
+          <p class="hint" id="acc-msg" aria-live="polite"></p>
+        </form>
+        <div id="acces-on" hidden>
+          <p class="acc-who" id="acc-who"></p>
+          <button class="btn" type="button" id="acc-off">Repasser en lecture seule</button>
+        </div>
       </div>
     </details>
     <span class="saved" id="saved"></span>
@@ -195,9 +220,9 @@ button{cursor:pointer}
       <button type="button" data-f="repair" aria-pressed="false">À réparer</button>
     </div>
     <ul class="list" id="list"></ul>
-    <button class="btn add" id="btn-add" type="button">Ajouter une cible</button>
+    <button class="btn add edit-only" id="btn-add" type="button">Ajouter une cible</button>
 
-    <details class="settings">
+    <details class="settings edit-only">
       <summary>Réglages de sécurité et du terrain</summary>
       <div class="body">
         <p class="hint">Zone de sécurité dessinée derrière chaque cible. Valeurs indicatives : à aligner sur la réglementation FFTA applicable à votre terrain. Trajectoire et largeur de ligne : valeurs par défaut, modifiables dans la fiche de chaque cible.</p>
@@ -212,7 +237,7 @@ button{cursor:pointer}
         </div>
         <div class="actions">
           <button class="btn small" type="button" id="btn-perim-clear">Effacer le périmètre</button>
-          <button class="btn small danger" type="button" id="btn-reset">Repartir de l'inventaire</button>
+          <button class="btn small danger nosync" type="button" id="btn-reset">Repartir de l'inventaire</button>
         </div>
       </div>
     </details>
@@ -260,6 +285,9 @@ const SEED=[
 ];
 const DEFAULT_SETTINGS={profondeur:50,demiLargeur:10,ouverture:10,tolerance:2,zoneSecu:false,trajDefaut:20,largeurDefaut:3};
 const KEY='terrainArc.saintvrain.v1';
+/* Adresse du script Google Apps Script du Sheet (se termine par /exec).
+   Laissee vide : pas de synchronisation, l'appli fonctionne comme avant (appareil + terrain.json). */
+const SYNC_URL='';
 const CENTER=[48.5436,2.3320];
 const MAPC={axis:'#3ddc84',prot:'#29b6f6',warn:'#ff9f1c',bad:'#ff4d3d',zone:'#ff4d3d',perim:'#ffffff'};
 const FIELDS=['n','buttes','taille','dAct','dEnv','faire','reparer','trajLen','largeur','protection'];
@@ -293,8 +321,9 @@ let state=load()||fresh();
 let sel=null, mode=null, filter='all', perimBackup=null;
 
 let saveTimer=null;
-function save(){
-  try{localStorage.setItem(KEY,JSON.stringify(state)); $('#saved').textContent='Enregistré sur cet appareil';}
+function save(){localSave(); diffQueue();}
+function localSave(){
+  try{localStorage.setItem(KEY,JSON.stringify(state)); if(SYNC_URL) setStatus(); else $('#saved').textContent='Enregistré sur cet appareil';}
   catch(e){$('#saved').textContent='Sauvegarde locale impossible : exportez le projet';}
 }
 function saveSoon(){clearTimeout(saveTimer);saveTimer=setTimeout(save,300);}
@@ -431,7 +460,7 @@ function ensure(t){
     if(!pos){if(ly[k]){map.removeLayer(ly[k]);ly[k]=null;}return;}
     const icon=k==='cible'?icCible(t):icPas(t);
     if(!ly[k]){
-      const m=L.marker(pos,{draggable:true,icon:icon,keyboard:false,zIndexOffset:k==='cible'?600:500,
+      const m=L.marker(pos,{draggable:canEdit(),icon:icon,keyboard:false,zIndexOffset:k==='cible'?600:500,
         title:(k==='cible'?'Cible ':'Pas de tir ')+t.n}).addTo(map);
       m.on('click',()=>{if(!mode) select(t.id,false);});
       m.on('drag',e=>{const ll=e.target.getLatLng();t[k]=[ll.lat,ll.lng];drawGeo(t);});
@@ -621,7 +650,7 @@ $('#results').addEventListener('click',e=>{
   const it=$('#results')._items[+b.dataset.i];
   map.setView(it.ll,17); $('#results').hidden=true;
 });
-document.addEventListener('click',e=>{if(!e.target.closest('.search')) $('#results').hidden=true; if(!e.target.closest('#menu')) $('#menu').open=false;});
+document.addEventListener('click',e=>{if(!e.target.closest('.search')) $('#results').hidden=true; if(!e.target.closest('#menu')) $('#menu').open=false; if(!e.target.closest('#acces')) $('#acces').open=false;});
 
 /* ---------- Liste et resume ---------- */
 function renderSummary(){
@@ -690,14 +719,14 @@ function renderDetail(){
     '<div class="dhead"><h2>Cible '+esc(t.n)+' <small>'+esc(t.taille||'?')+' cm</small></h2>'+
     '<button class="btn small" type="button" data-a="close">Fermer</button></div>'+
     '<dl class="measures" id="measures"></dl>'+
-    '<div class="actions">'+
+    '<div class="actions edit-only">'+
       '<button class="btn small" type="button" data-a="place-cible" aria-pressed="false"></button>'+
       '<button class="btn small" type="button" data-a="place-pas" aria-pressed="false"></button>'+
       '<button class="btn small" type="button" data-a="gps-cible">Cible ici (GPS)</button>'+
       '<button class="btn small" type="button" data-a="gps-pas">Pas de tir ici (GPS)</button>'+
       ((t.cible||t.pas)?'<button class="btn small" type="button" data-a="clear">Retirer de la carte</button>':'')+
     '</div>'+
-    '<p class="hint">Les marqueurs se déplacent à la souris ou au doigt. Losange blanc : pas de tir. Bande verte : ligne de tir (orange ou rouge en cas d\'alerte). Barre bleue : protection. Tirets après la cible : trajectoire. Pointillés avant le pas : distance envisagée.</p>'+
+    '<p class="hint edit-only">Les marqueurs se déplacent à la souris ou au doigt. Losange blanc : pas de tir. Bande verte : ligne de tir (orange ou rouge en cas d\'alerte). Barre bleue : protection. Tirets après la cible : trajectoire. Pointillés avant le pas : distance envisagée.</p>'+
     '<div class="form">'+
       field('n','N°','')+field('buttes','Buttes','number')+field('taille','Taille (cm)','')+
       field('dAct','Distance actuelle (m)','')+field('dEnv','Envisagée (m)','')+
@@ -706,16 +735,16 @@ function renderDetail(){
       selectField('protection','Protection derrière',PROTECTIONS)+
       area('faire','À faire')+area('reparer','À réparer')+
     '</div>'+
-    '<div class="actions"><button class="btn small danger" type="button" data-a="delete">Supprimer la cible</button></div>'+
+    '<div class="actions edit-only"><button class="btn small danger" type="button" data-a="delete">Supprimer la cible</button></div>'+
    '</section>';
   renderMeasures(); updatePlaceButtons();
 }
-function field(k,lab,type,ph){return '<label>'+lab+'<input id="f-'+k+'" data-k="'+k+'" '+(type?'type="'+type+'" min="0" step="0.5" ':'')+(ph?'placeholder="'+esc(ph)+'" ':'')+'value="'+esc(byId(sel)[k])+'"></label>';}
+function field(k,lab,type,ph){return '<label>'+lab+'<input id="f-'+k+'" data-k="'+k+'" '+(type?'type="'+type+'" min="0" step="0.5" ':'')+(ph?'placeholder="'+esc(ph)+'" ':'')+(canEdit()?'':'disabled ')+'value="'+esc(byId(sel)[k])+'"></label>';}
 function selectField(k,lab,opts){
   const cur=byId(sel)[k]||'';
-  return '<label>'+lab+'<select id="f-'+k+'" data-k="'+k+'">'+Object.keys(opts).map(v=>'<option value="'+esc(v)+'"'+(v===cur?' selected':'')+'>'+esc(opts[v])+'</option>').join('')+'</select></label>';
+  return '<label>'+lab+'<select id="f-'+k+'" data-k="'+k+'"'+(canEdit()?'':' disabled')+'>'+Object.keys(opts).map(v=>'<option value="'+esc(v)+'"'+(v===cur?' selected':'')+'>'+esc(opts[v])+'</option>').join('')+'</select></label>';
 }
-function area(k,lab){return '<label class="wide">'+lab+'<textarea id="f-'+k+'" data-k="'+k+'" rows="3">'+esc(byId(sel)[k])+'</textarea></label>';}
+function area(k,lab){return '<label class="wide">'+lab+'<textarea id="f-'+k+'" data-k="'+k+'" rows="3"'+(canEdit()?'':' disabled')+'>'+esc(byId(sel)[k])+'</textarea></label>';}
 
 function renderMeasures(){
   const t=byId(sel), box=$('#measures'); if(!t||!box) return;
@@ -956,9 +985,219 @@ $('#file').addEventListener('change',async e=>{
   }catch(err){toast(err.message||'Import impossible : fichier illisible.');}
 });
 
+
+/* ---------- Synchronisation avec le Google Sheet (script Apps Script) ----------
+   - lecture a l'ouverture puis toutes les minutes ;
+   - chaque modification est comparee a la derniere version connue du Sheet et envoyee cible par cible ;
+   - sans reseau, les modifications attendent sur l'appareil et partent au retour du reseau. */
+const K_ACCES=KEY+'.acces', K_PENDING=KEY+'.attente', K_AVANT=KEY+'.avantSync', K_SYNCOK=KEY+'.syncOk';
+function getLS(k){try{return localStorage.getItem(k);}catch(e){return null;}}
+function setLS(k,v){try{if(v==null) localStorage.removeItem(k); else localStorage.setItem(k,v);}catch(e){}}
+let acces=(()=>{try{return JSON.parse(getLS(K_ACCES)||'null')||{};}catch(e){return {};}})();
+let pending=(()=>{try{return JSON.parse(getLS(K_PENDING)||'null')||{};}catch(e){return {};}})();
+let synced=null, lastVersion=null, flushing=false, flushTimer=null;
+
+function canEdit(){return !SYNC_URL||!!acces.code;}
+function nbPending(){return Object.keys(pending).length;}
+function storePending(){setLS(K_PENDING,nbPending()?JSON.stringify(pending):null);}
+function storeAcces(){setLS(K_ACCES,acces.code?JSON.stringify(acces):null);}
+
+function setStatus(msg){
+  if(!SYNC_URL) return;
+  const el=$('#saved'), n=nbPending();
+  el.classList.toggle('attente',n>0);
+  if(msg) el.textContent=msg;
+  else if(n) el.textContent=n+' modification'+(n>1?'s':'')+' en attente d\'envoi';
+  else if(!canEdit()) el.textContent='Lecture seule';
+  else el.textContent='Synchronisé avec le Sheet'+(acces.nom?' · '+acces.nom:'');
+}
+
+function numOrNull(v){const x=parseFloat(String(v==null?'':v).replace(',','.'));return isNaN(x)?null:x;}
+function protKey(v){
+  v=String(v==null?'':v).trim(); if(!v) return '';
+  const k=Object.keys(PROTECTIONS).find(k=>k&&(k===v.toLowerCase()||PROTECTIONS[k].toLowerCase()===v.toLowerCase()));
+  return k!=null?k:'autre';
+}
+function fromRow(o){
+  const t={id:String(o.id)};
+  ['n','buttes','taille','dAct','dEnv','faire','reparer','largeur','trajLen'].forEach(k=>{t[k]=o[k]==null?'':String(o[k]);});
+  t.protection=protKey(o.protection);
+  const cl=numOrNull(o.cLat),cg=numOrNull(o.cLng),pl=numOrNull(o.pLat),pg=numOrNull(o.pLng);
+  t.cible=(cl!=null&&cg!=null)?[cl,cg]:null;
+  t.pas=(pl!=null&&pg!=null)?[pl,pg]:null;
+  t.zCible=numOrNull(o.zCible); t.zPas=numOrNull(o.zPas);
+  return t;
+}
+function toRow(t){
+  const a=analyse(t), c=v=>+v.toFixed(7);
+  return {id:t.id,n:t.n,buttes:t.buttes,taille:t.taille,dAct:t.dAct,dEnv:t.dEnv,faire:t.faire,reparer:t.reparer,
+    protection:t.protection?(PROTECTIONS[t.protection]||t.protection):'',largeur:t.largeur,trajLen:t.trajLen,
+    dist:a.placed?Math.round(a.dist*10)/10:'',
+    cLat:t.cible?c(t.cible[0]):'',cLng:t.cible?c(t.cible[1]):'',pLat:t.pas?c(t.pas[0]):'',pLng:t.pas?c(t.pas[1]):'',
+    zCible:t.zCible==null?'':t.zCible,zPas:t.zPas==null?'':t.zPas};
+}
+function snap(){
+  const m={}; state.targets.forEach(t=>{m[t.id]=JSON.stringify(toRow(t));});
+  return {t:m,c:JSON.stringify({perimetre:state.perimetre,reglages:state.settings})};
+}
+/* Compare l'etat courant a la derniere version du Sheet et met les differences en file d'attente */
+function diffQueue(){
+  if(!SYNC_URL||!synced||!canEdit()) return;
+  const s=snap();
+  Object.keys(s.t).forEach(id=>{if(s.t[id]!==synced.t[id]) pending[id]={action:'cible',cible:JSON.parse(s.t[id])};});
+  Object.keys(synced.t).forEach(id=>{if(!(id in s.t)) pending[id]={action:'supprimer',id:id};});
+  if(s.c!==synced.c) pending['__config']=Object.assign({action:'config'},JSON.parse(s.c));
+  synced=s; storePending(); setStatus();
+  if(nbPending()){clearTimeout(flushTimer);flushTimer=setTimeout(flush,1200);}
+}
+
+async function api(body){
+  const res=await fetch(SYNC_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body),redirect:'follow'});
+  if(!res.ok) throw new Error('reseau');
+  return res.json();
+}
+function errText(err){
+  return err==='bloque'?'Trop d\'essais de code : réessayez dans 10 minutes.':
+         err==='config'?'Aucun code d\'édition n\'est défini dans le script (propriété CODE_EDITION).':
+         err==='code'?'Code d\'édition incorrect.':'Le script a renvoyé une erreur.';
+}
+function handleErr(r){
+  if(r.err==='code'&&acces.code){acces={nom:acces.nom};storeAcces();updateEditUI();toast('Code d\'édition refusé : réactivez l\'édition.');}
+  else toast(r.message?errText(r.err)+' ('+r.message+')':errText(r.err));
+}
+
+async function flush(){
+  if(flushing||!acces.code||!nbPending()) return;
+  flushing=true; setStatus('Envoi au Sheet...');
+  try{
+    for(const k of Object.keys(pending)){
+      const op=pending[k];
+      const r=await api(Object.assign({},op,{code:acces.code,par:acces.nom||''}));
+      if(!r.ok){handleErr(r);break;}
+      if(pending[k]===op) delete pending[k];
+      lastVersion=r.version; storePending();
+    }
+  }catch(e){/* pas de reseau : nouvel essai plus tard */}
+  flushing=false; setStatus();
+}
+
+/* Remplace les donnees par celles du Sheet, en gardant les modifications locales pas encore envoyees */
+function applyServer(r){
+  if(!getLS(K_SYNCOK)){
+    const cur=getLS(KEY);
+    try{ if(cur&&JSON.parse(cur).targets.some(t=>t.cible||t.pas)&&!getLS(K_AVANT)) setLS(K_AVANT,cur); }catch(e){}
+    setLS(K_SYNCOK,'1');
+  }
+  lastVersion=r.version;
+  const keepSel=sel;
+  Object.keys(layers).forEach(dropLayers);
+  state.targets=(r.cibles||[]).map(fromRow);
+  if(Array.isArray(r.perimetre)) state.perimetre=r.perimetre;
+  if(r.reglages) state.settings=Object.assign({},DEFAULT_SETTINGS,r.reglages);
+  Object.keys(pending).forEach(k=>{
+    const op=pending[k];
+    if(op.action==='cible'){const t=fromRow(op.cible),i=state.targets.findIndex(x=>x.id===t.id); if(i>=0) state.targets[i]=t; else state.targets.push(t);}
+    else if(op.action==='supprimer') state.targets=state.targets.filter(x=>x.id!==op.id);
+    else if(op.action==='config'){state.perimetre=op.perimetre||[]; state.settings=Object.assign({},DEFAULT_SETTINGS,op.reglages||{});}
+  });
+  normalize(state);
+  synced=snap();
+  sel=byId(keepSel)?keepSel:null;
+  localSave(); syncSettings(); drawPerim(); renderAll(); updateRestore(); setStatus();
+}
+
+async function refresh(){
+  try{
+    const r=await api({action:'lire',code:acces.code||''});
+    if(!r.ok){
+      if(!synced) synced=snap();
+      if(r.err==='code'&&!acces.code){setStatus('Code requis pour consulter');$('#acces').open=true;}
+      else handleErr(r);
+      return;
+    }
+    if(r.version!==lastVersion||!synced) applyServer(r);
+  }catch(e){
+    if(!synced) synced=snap();
+    setStatus(nbPending()?null:'Hors ligne : données de l\'appareil');
+  }
+}
+function busy(){
+  const a=document.activeElement;
+  return !!mode||!!(a&&a.closest&&a.closest('.detail,.settings,#acces'));
+}
+async function poll(){
+  if(document.hidden) return;
+  if(nbPending()){await flush(); return;}
+  if(!busy()) refresh();
+}
+
+function updateEditUI(){
+  document.body.classList.toggle('sync',!!SYNC_URL);
+  document.body.classList.toggle('lecture',!canEdit());
+  $('#acces').hidden=!SYNC_URL;
+  $('#acces-btn').textContent=canEdit()?'Édition active':'Modifier';
+  $('#acces-form').hidden=canEdit(); $('#acces-on').hidden=!canEdit();
+  $('#acc-who').textContent='Édition active'+(acces.nom?' : '+acces.nom:'');
+  if(acces.nom&&!$('#acc-nom').value) $('#acc-nom').value=acces.nom;
+  if(!canEdit()&&mode) setMode(null);
+  Object.keys(layers).forEach(dropLayers); redrawAll(); renderDetail(); updateRestore(); setStatus();
+}
+function updateRestore(){$('#btn-restore').hidden=!(SYNC_URL&&getLS(K_AVANT));}
+
+$('#acces-form').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const code=$('#acc-code').value.trim(), nom=$('#acc-nom').value.trim(), msg=$('#acc-msg');
+  if(!code) return;
+  msg.textContent='Vérification...';
+  try{
+    const r=await api({action:'verifier',code:code});
+    if(!r.ok){msg.textContent=errText(r.err);return;}
+    acces={code:code,nom:nom}; storeAcces();
+    $('#acc-code').value=''; msg.textContent=''; $('#acces').open=false;
+    updateEditUI(); toast('Édition activée');
+    await flush(); await refresh();
+  }catch(err){msg.textContent='Connexion au script impossible : vérifiez le réseau.';}
+});
+$('#acc-off').addEventListener('click',()=>{acces={nom:acces.nom};storeAcces();$('#acces').open=false;updateEditUI();toast('Lecture seule');});
+$('#btn-restore').addEventListener('click',()=>{
+  $('#menu').open=false;
+  try{
+    const s=JSON.parse(getLS(K_AVANT)); if(!s||!Array.isArray(s.targets)) throw new Error();
+    /* Fusion sans suppression : on reprend les positions et reglages par cible de la sauvegarde,
+       les textes du Sheet restent ceux du Sheet ; les cibles absentes du Sheet sont ajoutees. */
+    let n=0;
+    Object.keys(layers).forEach(dropLayers);
+    s.targets.forEach(b=>{
+      if(!b||!b.id||!(b.cible||b.pas)) return;
+      let t=byId(b.id);
+      if(!t){t=Object.assign({},b);FIELDS.forEach(k=>{if(t[k]==null)t[k]='';});state.targets.push(t);}
+      else{
+        ['cible','pas','zCible','zPas'].forEach(k=>{if(b[k]!=null) t[k]=b[k];});
+        ['largeur','trajLen','protection'].forEach(k=>{if(b[k]) t[k]=b[k];});
+      }
+      n++;
+    });
+    if(Array.isArray(s.perimetre)&&s.perimetre.length>=3&&state.perimetre.length<3) state.perimetre=s.perimetre;
+    sel=null; save(); drawPerim(); renderAll();
+    setLS(K_AVANT,null); updateRestore();
+    toast(n+' cible'+(n>1?'s':'')+' placée'+(n>1?'s':'')+' ajoutée'+(n>1?'s':'')+' au Sheet');
+  }catch(e){toast('Sauvegarde illisible : rien n\'a été envoyé.');}
+});
+
+async function startSync(){
+  updateEditUI();
+  setStatus('Connexion au Sheet...');
+  if(acces.code&&nbPending()) await flush();
+  await refresh();
+  setInterval(poll,60000);
+  window.addEventListener('online',()=>{flush().then(refresh);});
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden) poll();});
+}
+
 /* ---------- Demarrage ---------- */
 function renderAll(){redrawAll();renderList();renderDetail();}
 function showPublie(){
+  if(SYNC_URL) return setStatus();
   $('#saved').textContent=state.publie?'Données du club du '+new Date(state.publie).toLocaleDateString('fr-FR'):
     (state.targets.some(t=>t.cible)?'Enregistré sur cet appareil':'Inventaire du 08/11 chargé');
 }
@@ -990,7 +1229,7 @@ async function loadRemote(){
 
 drawPerim(); renderAll(); showPublie();
 if(!state.view) fitPlaced();
-loadRemote();
+if(SYNC_URL) startSync(); else loadRemote();
 })();
 </script>
 </body>
