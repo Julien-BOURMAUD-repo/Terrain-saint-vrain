@@ -123,6 +123,23 @@ button{cursor:pointer}
 .pq-tag{font-size:12px;color:var(--muted)}
 .pq-act,.pq-add{display:flex;flex-wrap:wrap;gap:6px}
 .pq-act{margin-left:auto}
+.photos{display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:8px 10px}
+.ph-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:6px}
+.ph-th{position:relative;aspect-ratio:1;max-width:100%;border:1px solid var(--line);border-radius:5px;overflow:hidden;padding:0;background:var(--soft);display:grid;place-items:center;color:var(--muted);font-size:12px}
+.ph-th img{width:100%;height:100%;object-fit:cover;display:block}
+.ph-th small{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);color:#fff;font-size:10px;line-height:1.4;padding:0 4px;text-align:left}
+.ph-draft{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
+.ph-draft img{width:96px;height:96px;object-fit:cover;border-radius:5px;border:1px solid var(--line)}
+.ph-draft label{flex:1 1 180px;display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted);min-width:0}
+.ph-draft input{border:1px solid var(--line);border-radius:5px;background:var(--soft);color:var(--ink);padding:6px 8px;min-width:0}
+#ph-view{position:fixed;inset:0;z-index:3500;background:rgba(8,12,9,.96);display:flex;align-items:center;justify-content:center;
+  padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.phv-box{display:flex;flex-direction:column;gap:10px;max-width:min(1100px,100%);max-height:100%;min-width:0}
+.phv-box img{max-width:100%;max-height:calc(100svh - 150px);object-fit:contain;border-radius:4px;background:#111}
+.phv-cap{margin:0;color:#e8ede9;font-size:14px}
+.phv-btns{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
+.phv-btns .btn:not(.danger){background:#fff;color:#111}
+.phv-btns .btn.danger:not(.armed){background:#fff}
 
 .parc{border-bottom:1px solid var(--line)}
 .parc summary{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;padding:12px 16px;cursor:pointer}
@@ -378,6 +395,15 @@ button{cursor:pointer}
     </section>
   </div>
 </div>
+<input type="file" id="ph-cam" accept="image/*" capture="environment" hidden>
+<input type="file" id="ph-file" accept="image/*" hidden>
+<div id="ph-view" hidden role="dialog" aria-modal="true" aria-label="Photo de la cible">
+  <div class="phv-box">
+    <img id="phv-img" alt="Photo de la cible">
+    <p class="phv-cap" id="phv-cap"></p>
+    <div class="phv-btns"><button class="btn danger edit-only" id="phv-del" type="button">Supprimer la photo</button><button class="btn" id="phv-close" type="button">Fermer</button></div>
+  </div>
+</div>
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -494,6 +520,8 @@ function cloneCible(t,parcId){const c=JSON.parse(JSON.stringify(t)); c.id='t'+ui
 function nomParcours(id){const q=state.parcours.find(x=>x.id===id); return q?q.nom:'';}
 let state=load()||normalize(fresh());
 let sel=null, mode=null, filter='all', perimBackup=null, parcDelArmed=false, altiRunning=false;
+let photos=[], phDraft=null, phBusy=false, phOpen=null, phDelArmed=false, thumbsLoading=false;
+const thumbCache={}, fullCache={};
 
 let saveTimer=null;
 function save(){localSave(); diffQueue();}
@@ -1093,7 +1121,8 @@ function renderList(){
     const a=analyse(t); if(!matches(t,a)) return '';
     const env=(t.dEnv&&t.dEnv!==t.dAct&&String(t.dEnv).trim()!=='?')?' → '+esc(t.dEnv):'';
     const nRep=lines(t.reparer).length;
-    const meta=esc(t.taille||'?')+' cm · '+esc(t.buttes||'1')+' butte'+((+t.buttes>1)?'s':'')+' · '+esc(t.dAct||'?')+' m'+env+(nRep?' · '+nRep+' répar.':'')+(t.protection==='aucune'?' · sans protection':'');
+    const nPh=photosDe(t.id).length;
+    const meta=esc(t.taille||'?')+' cm · '+esc(t.buttes||'1')+' butte'+((+t.buttes>1)?'s':'')+' · '+esc(t.dAct||'?')+' m'+env+(nRep?' · '+nRep+' répar.':'')+(t.protection==='aucune'?' · sans protection':'')+(nPh?' · '+nPh+' photo'+(nPh>1?'s':''):'');
     return '<li><button type="button" class="item'+(sel===t.id?' is-sel':'')+'" data-id="'+t.id+'">'+
       '<span class="num'+(String(t.n).length>3?' long':'')+'">'+esc(t.n)+'</span>'+
       '<span class="it-main"><span class="it-title">Cible '+esc(t.n)+'</span><span class="it-meta">'+meta+'</span></span>'+
@@ -1299,6 +1328,110 @@ $('#pr-fond').addEventListener('change',e=>{
 document.querySelectorAll('#pres [data-o]').forEach(c=>c.addEventListener('change',()=>{presOpts[c.dataset.o]=c.checked;renderPres();}));
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&presOn) closePres();});
 
+/* ---------- Photos par cible (stockees dans le Drive du club, servies par le script) ---------- */
+function photosDe(id){return photos.filter(x=>x.cibleId===id);}
+function photosHTML(t){
+  if(!SYNC_URL) return '';
+  const ps=photosDe(t.id).slice().reverse(), ed=canEdit();
+  let h='<div class="photos"><div class="pq-title">Photos'+(ps.length?' ('+ps.length+')':'')+'</div>';
+  if(ps.length) h+='<div class="ph-grid">'+ps.map(x=>'<button type="button" class="ph-th" data-ph="'+esc(x.id)+'" aria-label="Photo du '+esc(x.date)+(x.legende?' : '+esc(x.legende):'')+'">'+
+    (thumbCache[x.id]?'<img src="'+thumbCache[x.id]+'" alt="">':'<span>Photo</span>')+'<small>'+esc(String(x.date).slice(0,10))+'</small></button>').join('')+'</div>';
+  else if(!(phDraft&&phDraft.cibleId===t.id)) h+='<p class="hint">Aucune photo pour cette cible.</p>';
+  if(phDraft&&phDraft.cibleId===t.id){
+    h+='<div class="ph-draft"><img src="'+phDraft.thumb+'" alt="Aperçu de la photo">'+
+      '<label>Légende (facultatif)<input id="ph-leg" maxlength="200" placeholder="Ex. : toiture abîmée, après réparation" value="'+esc(phDraft.leg||'')+'"></label>'+
+      '<div class="pq-add"><button class="btn small primary" type="button" data-a="ph-send"'+(phBusy?' disabled':'')+'>'+(phBusy?'Envoi en cours...':'Envoyer la photo')+'</button>'+
+      '<button class="btn small" type="button" data-a="ph-cancel">Annuler</button></div></div>';
+  }else if(ed) h+='<div class="pq-add edit-only"><button class="btn small" type="button" data-a="ph-cam">Prendre une photo</button>'+
+    '<button class="btn small" type="button" data-a="ph-file">Choisir une image</button></div>';
+  return h+'</div>';
+}
+/* Reduit l'image sur l'appareil avant l'envoi (JPEG) */
+function resizeImage(file,max,q){
+  return new Promise((res,rej)=>{
+    const url=URL.createObjectURL(file), img=new Image();
+    img.onload=()=>{
+      try{
+        const k=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
+        const c=document.createElement('canvas'); c.width=Math.max(1,Math.round(img.naturalWidth*k)); c.height=Math.max(1,Math.round(img.naturalHeight*k));
+        c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+        res(c.toDataURL('image/jpeg',q));
+      }catch(e){rej(e);}finally{URL.revokeObjectURL(url);}
+    };
+    img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error('Image illisible'));};
+    img.src=url;
+  });
+}
+async function preparerPhoto(file){
+  const t=byId(sel); if(!file||!t) return;
+  try{
+    const full=await resizeImage(file,1600,0.82);
+    let thumb=await resizeImage(file,360,0.7);
+    if(thumb.length>45000) thumb=await resizeImage(file,260,0.55);
+    phDraft={cibleId:t.id,full:full,thumb:thumb,leg:''}; renderDetail();
+  }catch(e){toast('Image illisible : essayez une autre photo.');}
+}
+['#ph-cam','#ph-file'].forEach(id=>$(id).addEventListener('change',e=>{const f=e.target.files[0]; e.target.value=''; preparerPhoto(f);}));
+async function envoyerPhoto(btn){
+  if(!phDraft||phBusy||!canEdit()) return;
+  const t=byId(phDraft.cibleId); if(!t){phDraft=null;return;}
+  phBusy=true; if(btn){btn.disabled=true;btn.textContent='Envoi en cours...';}
+  try{
+    const r=await api({action:'photo',code:acces.code,par:acces.nom||'',cibleId:t.id,cible:t.n,parc:nomParcours(t.parc),
+      legende:String(phDraft.leg||'').trim(),data:phDraft.full.split(',')[1],vignette:phDraft.thumb});
+    if(!r.ok) handleErr(r);
+    else{
+      photos.push(r.photo); thumbCache[r.photo.id]=phDraft.thumb; garderPhoto(r.photo.id,phDraft.full);
+      lastVersion=r.version; phDraft=null; toast('Photo envoyée'); renderList();
+    }
+  }catch(e){toast('Pas de réseau : la photo n\'a pas été envoyée. Réessayez quand le réseau revient.');}
+  phBusy=false; if(sel) renderDetail();
+}
+async function loadThumbs(){
+  const t=byId(sel); if(!t||thumbsLoading||!SYNC_URL) return;
+  const ids=photosDe(t.id).map(x=>x.id).filter(id=>!(id in thumbCache)); if(!ids.length) return;
+  thumbsLoading=true;
+  try{
+    const r=await api({action:'vignettes',ids:ids,code:acces.code||''});
+    if(r.ok){
+      ids.forEach(id=>{const v=(r.vignettes&&r.vignettes[id])||''; thumbCache[id]=/^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(v)?v:'';});
+      document.querySelectorAll('[data-ph]').forEach(b=>{const v=thumbCache[b.dataset.ph], sp=b.querySelector('span'); if(v&&sp){const im=new Image(); im.src=v; im.alt=''; sp.replaceWith(im);}});
+    }
+  }catch(e){/* hors ligne : les vignettes viendront plus tard */}
+  thumbsLoading=false;
+}
+function garderPhoto(id,data){
+  fullCache[id]=data; const k=Object.keys(fullCache); if(k.length>8) delete fullCache[k[0]];
+}
+async function ouvrirPhoto(id){
+  const x=photos.find(p=>p.id===id); if(!x) return;
+  phOpen=id; phDelArmed=false;
+  $('#phv-del').textContent='Supprimer la photo'; $('#phv-del').classList.remove('armed');
+  $('#phv-cap').textContent=[x.legende,x.date,x.par?'par '+x.par:''].filter(Boolean).join(' · ');
+  const img=$('#phv-img'); img.src=fullCache[id]||thumbCache[id]||''; $('#ph-view').hidden=false; $('#phv-close').focus();
+  if(!fullCache[id]){
+    try{const r=await api({action:'photoData',id:id,code:acces.code||''}); if(r.ok) garderPhoto(id,r.data); else toast('Photo introuvable : elle a peut-être été supprimée.');}
+    catch(e){toast('Pas de réseau : photo affichée en petite taille.');}
+    if(phOpen===id&&fullCache[id]) img.src=fullCache[id];
+  }
+}
+function fermerPhoto(){phOpen=null;$('#ph-view').hidden=true;$('#phv-img').removeAttribute('src');}
+$('#phv-close').addEventListener('click',fermerPhoto);
+$('#ph-view').addEventListener('click',e=>{if(e.target.id==='ph-view') fermerPhoto();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&phOpen) fermerPhoto();});
+$('#phv-del').addEventListener('click',async()=>{
+  if(!phOpen||!canEdit()) return;
+  const b=$('#phv-del');
+  if(!phDelArmed){phDelArmed=true;b.classList.add('armed');b.textContent='Confirmer la suppression';return;}
+  const id=phOpen; b.disabled=true;
+  try{
+    const r=await api({action:'supprimerPhoto',id:id,code:acces.code,par:acces.nom||''});
+    if(!r.ok) handleErr(r);
+    else{photos=photos.filter(x=>x.id!==id); delete thumbCache[id]; delete fullCache[id]; lastVersion=r.version; fermerPhoto(); renderList(); if(sel) renderDetail(); toast('Photo supprimée');}
+  }catch(e){toast('Pas de réseau : la photo n\'a pas été supprimée.');}
+  b.disabled=false;
+});
+
 /* ---------- Fiche cible ---------- */
 function select(id,fly){
   const prev=sel; sel=id;
@@ -1337,9 +1470,10 @@ function renderDetail(){
       selectField('protection','Protection derrière',PROTECTIONS)+
       area('faire','À faire')+area('reparer','À réparer')+
     '</div>'+
+    photosHTML(t)+
     '<div class="actions edit-only"><button class="btn small danger" type="button" data-a="delete">Supprimer la cible</button></div>'+
    '</section>';
-  renderMeasures(); updatePlaceButtons();
+  renderMeasures(); updatePlaceButtons(); loadThumbs();
 }
 function piquetsHTML(t){
   const a=analyse(t), ed=canEdit();
@@ -1414,7 +1548,12 @@ function renderMeasures(){
 
 let delArmed=false;
 $('#detail-slot').addEventListener('click',e=>{
+  const th=e.target.closest('[data-ph]'); if(th){ouvrirPhoto(th.dataset.ph);return;}
   const b=e.target.closest('[data-a]'); if(!b) return;
+  if(b.dataset.a==='ph-cam'){$('#ph-cam').click();return;}
+  if(b.dataset.a==='ph-file'){$('#ph-file').click();return;}
+  if(b.dataset.a==='ph-cancel'){phDraft=null;renderDetail();return;}
+  if(b.dataset.a==='ph-send'){envoyerPhoto(b);return;}
   const t=byId(sel); if(!t) return;
   const a=b.dataset.a;
   if(a!=='delete'){delArmed=false;}
@@ -1444,6 +1583,7 @@ $('#detail-slot').addEventListener('click',e=>{
   }
 });
 $('#detail-slot').addEventListener('input',e=>{
+  if(e.target.id==='ph-leg'){if(phDraft) phDraft.leg=e.target.value;return;}
   const t0=byId(sel);
   if(t0&&e.target.dataset.ak!=null){const q=t0.autres[+e.target.dataset.ak]; if(q){q.c=e.target.value; ensure(t0); save(); renderDetail();} return;}
   const k=e.target.dataset.k; if(!k) return;
@@ -1759,6 +1899,7 @@ function applyServer(r){
   if(Array.isArray(r.perimetre)) state.perimetre=r.perimetre;
   if(r.reglages) state.settings=Object.assign({},DEFAULT_SETTINGS,r.reglages);
   state.parcours=Array.isArray(r.parcours)?r.parcours:[];
+  photos=Array.isArray(r.photos)?r.photos:[];
   Object.keys(pending).forEach(k=>{
     const op=pending[k];
     if(op.action==='cible'){const t=fromRow(op.cible),i=state.targets.findIndex(x=>x.id===t.id); if(i>=0) state.targets[i]=t; else state.targets.push(t);}
@@ -1792,7 +1933,7 @@ async function refresh(){
 }
 function busy(){
   const a=document.activeElement;
-  return !!mode||altiRunning||!!(a&&a.closest&&a.closest('.detail,.settings,#acces,.parc'));
+  return !!mode||altiRunning||phBusy||!!phOpen||!!(a&&a.closest&&a.closest('.detail,.settings,#acces,.parc'));
 }
 async function poll(){
   if(document.hidden) return;
