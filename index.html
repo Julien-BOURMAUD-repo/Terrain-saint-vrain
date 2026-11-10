@@ -90,6 +90,7 @@ button{cursor:pointer}
 .dhead{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .measures{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden}
 .measures div{background:var(--panel);padding:8px 10px;min-width:0}
+.measures div:last-child:nth-child(odd){grid-column:1/-1}
 .measures dt{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .measures dd{margin:2px 0 0;font:600 19px/1.15 var(--f-num);font-variant-numeric:tabular-nums}
 .measures dd em{font:400 12px var(--f-body);color:var(--muted);font-style:normal;display:block}
@@ -97,7 +98,7 @@ button{cursor:pointer}
 .form{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .form label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted);min-width:0}
 .form label.wide{grid-column:1/-1}
-.form input,.form textarea{border:1px solid var(--line);border-radius:5px;background:var(--panel);padding:6px 8px;color:var(--ink);font-size:14px;min-width:0}
+.form input,.form textarea,.form select{border:1px solid var(--line);border-radius:5px;background:var(--panel);padding:6px 8px;color:var(--ink);font-size:14px;min-width:0}
 .form textarea{resize:vertical;min-height:58px}
 .hint{font-size:12px;color:var(--muted);margin:0}
 
@@ -122,7 +123,7 @@ button{cursor:pointer}
 .mk-pas b{width:17px;height:17px;background:#fff;border:2px solid #111;transform:rotate(45deg);display:grid;place-items:center;box-shadow:0 1px 4px rgba(0,0,0,.5)}
 .mk-pas b span{transform:rotate(-45deg);font:700 10px/1 var(--f-num);color:#111}
 .mk-pas.is-sel b{background:#ffd23f}
-.mk-dist,.mk-ghost{position:absolute;left:0;top:0;transform:translate(-50%,-50%);white-space:nowrap;font:600 14px/1 var(--f-num);color:#fff;background:rgba(14,20,16,.86);padding:3px 7px;border-radius:3px;border-left:3px solid #ffd23f}
+.mk-dist,.mk-ghost{position:absolute;left:0;top:0;transform:translate(-50%,-50%);white-space:nowrap;font:600 14px/1 var(--f-num);color:#fff;background:rgba(14,20,16,.86);padding:3px 7px;border-radius:3px;border-left:3px solid #3ddc84}
 .mk-dist.s-warn{border-left-color:#ff9f1c}
 .mk-dist.s-bad{border-left-color:#ff4d3d}
 .mk-ghost{background:rgba(14,20,16,.7);border-left:3px dashed #ffd23f;font-weight:500}
@@ -188,7 +189,7 @@ button{cursor:pointer}
           <label>Tolérance écart (m)<input id="s-tol" type="number" min="0" step="0.5"></label>
           <label>Trajectoire derrière (m)<input id="s-traj" type="number" min="0" step="1"></label>
           <label>Largeur ligne de tir (m)<input id="s-lane" type="number" min="0" step="0.5"></label>
-          <label class="wide" style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input id="s-zones" type="checkbox"> Afficher la zone de toutes les cibles</label>
+          <label class="wide" style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input id="s-zones" type="checkbox"> Afficher et contrôler la zone de sécurité (rectangle rouge)</label>
         </div>
         <div class="actions">
           <button class="btn small" type="button" id="btn-perim-clear">Effacer le périmètre</button>
@@ -238,16 +239,18 @@ const SEED=[
  {n:"23",buttes:"1",taille:"90",dAct:"?",dEnv:"?",faire:"- Accès trop compliqué\n- Déplacer cette cible",reparer:"RAS"},
  {n:"24",buttes:"3",taille:"90",dAct:"?",dEnv:"?",faire:"- Tout à refaire\n- Chemin\n- Arbre etc",reparer:"RAS"}
 ];
-const DEFAULT_SETTINGS={profondeur:50,demiLargeur:10,ouverture:10,tolerance:2,showZones:true,trajDefaut:20,largeurDefaut:3};
+const DEFAULT_SETTINGS={profondeur:50,demiLargeur:10,ouverture:10,tolerance:2,zoneSecu:false,trajDefaut:20,largeurDefaut:3};
 const KEY='terrainArc.saintvrain.v1';
 const CENTER=[48.5436,2.3320];
-const MAPC={axis:'#ffd23f',warn:'#ff9f1c',bad:'#ff4d3d',zone:'#ff4d3d',perim:'#ffffff'};
-const FIELDS=['n','buttes','taille','dAct','dEnv','faire','reparer','trajLen','largeur'];
+const MAPC={axis:'#3ddc84',prot:'#29b6f6',warn:'#ff9f1c',bad:'#ff4d3d',zone:'#ff4d3d',perim:'#ffffff'};
+const FIELDS=['n','buttes','taille','dAct','dEnv','faire','reparer','trajLen','largeur','protection'];
+const PROTECTIONS={'':'Non renseignée','aucune':'Aucune','filet':'Filet pare-flèches','butte':'Butte de terre','mur':'Mur / palissade','talus':'Talus naturel','autre':'Autre'};
+const PROT_DIST=4; /* distance (m) a laquelle la protection est dessinee derriere la cible */
 const CSV_HEAD=['N° Cible','Nb de butte','Taille (cm)','Distance max actuel (mètre)','Distance max envisagé (mètre)','A Faire','A réparer'];
 
 /* ---------- Etat ---------- */
 function fresh(){
-  return {targets:SEED.map((s,i)=>Object.assign({id:'t'+(i+1),cible:null,pas:null,zCible:null,zPas:null,trajLen:'',largeur:''},s)),
+  return {targets:SEED.map((s,i)=>Object.assign({id:'t'+(i+1),cible:null,pas:null,zCible:null,zPas:null,trajLen:'',largeur:'',protection:''},s)),
           perimetre:[],settings:Object.assign({},DEFAULT_SETTINGS),view:null};
 }
 function load(){
@@ -346,10 +349,15 @@ function analyse(t){
   r.trajEnd=unproj(o,{x:fwd.x*tl,y:fwd.y*tl});
   r.couloir=[{x:P.x+side.x*h,y:P.y+side.y*h},{x:P.x-side.x*h,y:P.y-side.y*h},
              {x:fwd.x*tl-side.x*h,y:fwd.y*tl-side.y*h},{x:fwd.x*tl+side.x*h,y:fwd.y*tl+side.y*h}].map(v=>unproj(o,v));
+  /* Protection derriere la cible : barre perpendiculaire a l'axe, un peu plus large que la ligne de tir */
+  if(t.protection&&t.protection!=='aucune'){
+    const ph=Math.max(h+1.5,4);
+    r.protLine=[{x:fwd.x*PROT_DIST+side.x*ph,y:fwd.y*PROT_DIST+side.y*ph},{x:fwd.x*PROT_DIST-side.x*ph,y:fwd.y*PROT_DIST-side.y*ph}].map(v=>unproj(o,v));
+  }
   if(r.dAct!=null) r.ecart=r.dist-r.dAct;
   const per=state.perimetre;
   if(per.length>=3){
-    r.horsZone=!r.zone.every(p=>inPoly(p,per));
+    if(s.zoneSecu) r.horsZone=!r.zone.every(p=>inPoly(p,per));
     r.trajHors=!r.couloir.concat([r.trajEnd]).every(p=>inPoly(p,per));
     r.cibleDedans=inPoly(t.cible,per);
     if(r.cibleDedans) r.reculMax=rayMax(o,back,per);
@@ -377,6 +385,9 @@ L.control.layers({'Photo aérienne IGN':ortho,'Plan IGN':plan},{'Relief (ombrage
 L.control.scale({imperial:false,position:'bottomleft',maxWidth:160}).addTo(map);
 map.on('moveend',()=>{const c=map.getCenter();state.view={c:[c.lat,c.lng],z:map.getZoom()};saveSoon();});
 
+/* Calque dedie aux protections, dessine juste sous les marqueurs pour garder les numeros lisibles */
+map.createPane('prot'); map.getPane('prot').style.zIndex=590; map.getPane('prot').style.pointerEvents='none';
+const protRenderer=L.svg({pane:'prot'});
 const perimLayer=L.layerGroup().addTo(map);
 const meLayer=L.layerGroup().addTo(map);
 const layers={};
@@ -419,7 +430,7 @@ function drawGeo(t){
   const a=analyse(t); if(!a.placed) return;
   const isSel=sel===t.id;
   const col=a.status==='bad'?MAPC.bad:a.status==='warn'?MAPC.warn:MAPC.axis;
-  if(state.settings.showZones||isSel)
+  if(state.settings.zoneSecu)
     L.polygon(a.zone,{color:MAPC.zone,weight:1.5,opacity:.8,fillColor:MAPC.zone,fillOpacity:isSel?.22:.1,dashArray:'5 5',interactive:false}).addTo(g);
   const tcol=a.trajHors?MAPC.bad:col;
   if(a.largeur>0)
@@ -428,6 +439,10 @@ function drawGeo(t){
     L.polyline([t.cible,a.trajEnd],{color:'#000',weight:isSel?6:4,opacity:.3,dashArray:'10 6',interactive:false}).addTo(g);
     L.polyline([t.cible,a.trajEnd],{color:tcol,weight:isSel?3:2,opacity:1,dashArray:'10 6',interactive:false}).addTo(g);
     label(a.trajEnd,'<div class="mk-dist s-'+(a.trajHors?'bad':'ok')+'">+'+fmt(a.trajLen,0)+' m</div>',250).addTo(g);
+  }
+  if(a.protLine){
+    L.polyline(a.protLine,{pane:'prot',renderer:protRenderer,color:'#000',weight:isSel?11:9,opacity:.7,lineCap:'butt',interactive:false}).addTo(g);
+    L.polyline(a.protLine,{pane:'prot',renderer:protRenderer,color:MAPC.prot,weight:isSel?7:5,opacity:1,lineCap:'butt',interactive:false}).addTo(g);
   }
   if(a.ghost){
     L.polyline([t.pas,a.ghost],{color:col,weight:2,dashArray:'2 7',opacity:.95,interactive:false}).addTo(g);
@@ -477,7 +492,18 @@ function fetchElev(t){
 function setMode(m){
   mode=m;
   $('#map').classList.toggle('placing',!!m);
-  renderBanner(); drawPerim();
+  renderBanner(); drawPerim(); updatePlaceButtons();
+}
+/* Met en avant le bouton de l'action en cours, sinon la prochaine etape (cible puis pas de tir) */
+function updatePlaceButtons(){
+  const t=byId(sel), bc=document.querySelector('[data-a="place-cible"]'), bp=document.querySelector('[data-a="place-pas"]');
+  if(!t||!bc||!bp) return;
+  const active=(mode&&mode.id===t.id)?mode.type:null;
+  const next=active||(!t.cible?'cible':!t.pas?'pas':null);
+  bc.classList.toggle('primary',next==='cible'); bp.classList.toggle('primary',next==='pas');
+  bc.setAttribute('aria-pressed',String(active==='cible')); bp.setAttribute('aria-pressed',String(active==='pas'));
+  bc.textContent=active==='cible'?'Cliquez sur la carte (annuler)':(t.cible?'Replacer':'Placer')+' la cible';
+  bp.textContent=active==='pas'?'Cliquez sur la carte (annuler)':(t.pas?'Replacer':'Placer')+' le pas de tir';
 }
 function renderBanner(){
   const b=$('#banner');
@@ -599,7 +625,7 @@ function renderList(){
     const a=analyse(t); if(!matches(t,a)) return '';
     const env=(t.dEnv&&t.dEnv!==t.dAct&&String(t.dEnv).trim()!=='?')?' → '+esc(t.dEnv):'';
     const nRep=lines(t.reparer).length;
-    const meta=esc(t.taille||'?')+' cm · '+esc(t.buttes||'1')+' butte'+((+t.buttes>1)?'s':'')+' · '+esc(t.dAct||'?')+' m'+env+(nRep?' · '+nRep+' répar.':'');
+    const meta=esc(t.taille||'?')+' cm · '+esc(t.buttes||'1')+' butte'+((+t.buttes>1)?'s':'')+' · '+esc(t.dAct||'?')+' m'+env+(nRep?' · '+nRep+' répar.':'')+(t.protection==='aucune'?' · sans protection':'');
     return '<li><button type="button" class="item'+(sel===t.id?' is-sel':'')+'" data-id="'+t.id+'">'+
       '<span class="num'+(String(t.n).length>3?' long':'')+'">'+esc(t.n)+'</span>'+
       '<span class="it-main"><span class="it-title">Cible '+esc(t.n)+'</span><span class="it-meta">'+meta+'</span></span>'+
@@ -637,25 +663,30 @@ function renderDetail(){
     '<button class="btn small" type="button" data-a="close">Fermer</button></div>'+
     '<dl class="measures" id="measures"></dl>'+
     '<div class="actions">'+
-      '<button class="btn small primary" type="button" data-a="place-cible">'+(t.cible?'Replacer':'Placer')+' la cible</button>'+
-      '<button class="btn small" type="button" data-a="place-pas">'+(t.pas?'Replacer':'Placer')+' le pas de tir</button>'+
+      '<button class="btn small" type="button" data-a="place-cible" aria-pressed="false"></button>'+
+      '<button class="btn small" type="button" data-a="place-pas" aria-pressed="false"></button>'+
       '<button class="btn small" type="button" data-a="gps-cible">Cible ici (GPS)</button>'+
       '<button class="btn small" type="button" data-a="gps-pas">Pas de tir ici (GPS)</button>'+
       ((t.cible||t.pas)?'<button class="btn small" type="button" data-a="clear">Retirer de la carte</button>':'')+
     '</div>'+
-    '<p class="hint">Les marqueurs se déplacent à la souris ou au doigt. Losange blanc : pas de tir. Bande colorée : largeur de la ligne de tir. Tirets après la cible : trajectoire. Pointillés avant le pas : distance envisagée.</p>'+
+    '<p class="hint">Les marqueurs se déplacent à la souris ou au doigt. Losange blanc : pas de tir. Bande verte : ligne de tir (orange ou rouge en cas d\'alerte). Barre bleue : protection. Tirets après la cible : trajectoire. Pointillés avant le pas : distance envisagée.</p>'+
     '<div class="form">'+
       field('n','N°','')+field('buttes','Buttes','number')+field('taille','Taille (cm)','')+
       field('dAct','Distance actuelle (m)','')+field('dEnv','Envisagée (m)','')+
       field('largeur','Largeur ligne (m)','number','défaut '+fmt(+state.settings.largeurDefaut,1))+
       field('trajLen','Trajectoire derrière (m)','number','défaut '+fmt(+state.settings.trajDefaut,0))+
+      selectField('protection','Protection derrière',PROTECTIONS)+
       area('faire','À faire')+area('reparer','À réparer')+
     '</div>'+
     '<div class="actions"><button class="btn small danger" type="button" data-a="delete">Supprimer la cible</button></div>'+
    '</section>';
-  renderMeasures();
+  renderMeasures(); updatePlaceButtons();
 }
 function field(k,lab,type,ph){return '<label>'+lab+'<input id="f-'+k+'" data-k="'+k+'" '+(type?'type="'+type+'" min="0" step="0.5" ':'')+(ph?'placeholder="'+esc(ph)+'" ':'')+'value="'+esc(byId(sel)[k])+'"></label>';}
+function selectField(k,lab,opts){
+  const cur=byId(sel)[k]||'';
+  return '<label>'+lab+'<select id="f-'+k+'" data-k="'+k+'">'+Object.keys(opts).map(v=>'<option value="'+esc(v)+'"'+(v===cur?' selected':'')+'>'+esc(opts[v])+'</option>').join('')+'</select></label>';
+}
 function area(k,lab){return '<label class="wide">'+lab+'<textarea id="f-'+k+'" data-k="'+k+'" rows="3">'+esc(byId(sel)[k])+'</textarea></label>';}
 
 function renderMeasures(){
@@ -679,7 +710,7 @@ function renderMeasures(){
   else if(a.envPossible===false) env=[fmt(a.dEnv,0)+' m','dépasse le terrain','st-bad'];
   else if(a.envPossible===true) env=[fmt(a.dEnv,0)+' m','tient dans le terrain','st-ok'];
   else env=[fmt(a.dEnv,0)+' m','recul +'+fmt(a.dEnv-a.dist,1)+' m',''];
-  const zone=state.perimetre.length<3?['—','périmètre non tracé','']:a.horsZone?['Sort du terrain','revoir axe ou protection','st-bad']:['Dans le terrain','profondeur '+fmt(+s.profondeur,0)+' m','st-ok'];
+  const zone=!s.zoneSecu?['Désactivée','à activer dans Réglages','']:state.perimetre.length<3?['—','périmètre non tracé','']:a.horsZone?['Sort du terrain','revoir axe ou protection','st-bad']:['Dans le terrain','profondeur '+fmt(+s.profondeur,0)+' m','st-ok'];
   const traj=a.trajLen<=0?['—','non affichée','']:state.perimetre.length<3?['+'+fmt(a.trajLen,0)+' m','périmètre non tracé','']:
     a.trajHors?['+'+fmt(a.trajLen,0)+' m','sort du terrain','st-bad']:['+'+fmt(a.trajLen,0)+' m','reste dans le terrain','st-ok'];
   const dz=a.dz==null?['—','altitude en cours ou indisponible','']:[(a.dz>0?'+':'')+fmt(a.dz)+' m',(a.dz>=0?'montée ':'descente ')+fmt(Math.abs(a.pente),0)+' %',''];
@@ -690,6 +721,9 @@ function renderMeasures(){
     cell('Recul max',recul[0],recul[1],recul[2])+
     cell('Zone de sécurité',zone[0],zone[1],zone[2])+
     cell('Trajectoire derrière',traj[0],traj[1],traj[2])+
+    cell('Protection derrière',esc(PROTECTIONS[t.protection||'']||t.protection),
+      t.protection==='aucune'?'aucun arrêt derrière la cible':t.protection?'barre bleue sur la carte':'à renseigner',
+      t.protection==='aucune'?'st-warn':t.protection?'st-ok':'')+
     cell('Largeur ligne de tir',a.largeur>0?fmt(a.largeur,1)+' m':'—',t.largeur!==''?'propre à cette cible':'valeur par défaut')+
     cell('Dénivelé pas → cible',dz[0],dz[1])+
     cell('Orientation du tir',fmt(a.az,0)+'° '+cardinal(a.az),'azimut du pas vers la cible')+
@@ -703,8 +737,10 @@ $('#detail-slot').addEventListener('click',e=>{
   const a=b.dataset.a;
   if(a!=='delete'){delArmed=false;}
   if(a==='close'){const p=sel;sel=null;ensure(byId(p));renderList();renderDetail();}
-  else if(a==='place-cible') setMode({type:'cible',id:t.id});
-  else if(a==='place-pas') setMode({type:'pas',id:t.id});
+  else if(a==='place-cible'||a==='place-pas'){
+    const k=a==='place-cible'?'cible':'pas';
+    setMode(mode&&mode.type===k&&mode.id===t.id?null:{type:k,id:t.id});
+  }
   else if(a==='gps-cible') gpsPlace(t,'cible');
   else if(a==='gps-pas') gpsPlace(t,'pas');
   else if(a==='clear'){t.cible=null;t.pas=null;t.zCible=null;t.zPas=null;ensure(t);save();renderList();renderDetail();}
@@ -725,7 +761,7 @@ $('#detail-slot').addEventListener('input',e=>{
 
 $('#btn-add').addEventListener('click',()=>{
   const max=state.targets.reduce((m,t)=>Math.max(m,numFirst(t.n)||0),0);
-  const t={id:'t'+Date.now().toString(36),n:String(max+1),buttes:'1',taille:'90',dAct:'',dEnv:'',faire:'',reparer:'',trajLen:'',largeur:'',cible:null,pas:null,zCible:null,zPas:null};
+  const t={id:'t'+Date.now().toString(36),n:String(max+1),buttes:'1',taille:'90',dAct:'',dEnv:'',faire:'',reparer:'',trajLen:'',largeur:'',protection:'',cible:null,pas:null,zCible:null,zPas:null};
   state.targets.push(t); save(); filter='all';
   document.querySelectorAll('#filters [data-f]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.f==='all')));
   select(t.id,false); setMode({type:'cible',id:t.id});
@@ -745,12 +781,12 @@ function bindSetting(id,key,isBool){
   });
 }
 bindSetting('#s-prof','profondeur');bindSetting('#s-larg','demiLargeur');bindSetting('#s-ouv','ouverture');
-bindSetting('#s-tol','tolerance');bindSetting('#s-zones','showZones',true);
+bindSetting('#s-tol','tolerance');bindSetting('#s-zones','zoneSecu',true);
 bindSetting('#s-traj','trajDefaut');bindSetting('#s-lane','largeurDefaut');
 function syncSettings(){
   const m={'#s-prof':'profondeur','#s-larg':'demiLargeur','#s-ouv':'ouverture','#s-tol':'tolerance','#s-traj':'trajDefaut','#s-lane':'largeurDefaut'};
   Object.keys(m).forEach(id=>{$(id).value=state.settings[m[id]];});
-  $('#s-zones').checked=!!state.settings.showZones;
+  $('#s-zones').checked=!!state.settings.zoneSecu;
 }
 let resetArmed=false;
 $('#btn-reset').addEventListener('click',e=>{
@@ -777,23 +813,25 @@ function exportKML(){
   if(state.perimetre.length>=3) pm.push('<Placemark><name>Périmètre du terrain</name><styleUrl>#perim</styleUrl><Polygon><outerBoundaryIs><LinearRing><coordinates>'+state.perimetre.concat([state.perimetre[0]]).map(kc).join(' ')+'</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>');
   state.targets.forEach(t=>{
     const a=analyse(t);
-    const desc=xml('Taille '+(t.taille||'?')+' cm, '+(t.buttes||1)+' butte(s). Inventaire '+(t.dAct||'?')+' m, envisagé '+(t.dEnv||'?')+' m'+(a.placed?'. Mesuré '+fmt(a.dist)+' m':'')+'. A faire : '+(lines(t.faire).join(' ; ')||'RAS')+'. A réparer : '+(lines(t.reparer).join(' ; ')||'RAS'));
+    const desc=xml('Taille '+(t.taille||'?')+' cm, '+(t.buttes||1)+' butte(s). Inventaire '+(t.dAct||'?')+' m, envisagé '+(t.dEnv||'?')+' m'+(a.placed?'. Mesuré '+fmt(a.dist)+' m':'')+'. Protection derrière : '+(PROTECTIONS[t.protection||'']||t.protection)+'. A faire : '+(lines(t.faire).join(' ; ')||'RAS')+'. A réparer : '+(lines(t.reparer).join(' ; ')||'RAS'));
     if(t.cible) pm.push('<Placemark><name>Cible '+xml(t.n)+'</name><description>'+desc+'</description><styleUrl>#cible</styleUrl><Point><coordinates>'+kc(t.cible)+'</coordinates></Point></Placemark>');
     if(t.pas) pm.push('<Placemark><name>Pas de tir '+xml(t.n)+'</name><styleUrl>#pas</styleUrl><Point><coordinates>'+kc(t.pas)+'</coordinates></Point></Placemark>');
     if(a.placed){
       pm.push('<Placemark><name>Axe '+xml(t.n)+' ('+fmt(a.dist)+' m)</name><styleUrl>#axe</styleUrl><LineString><tessellate>1</tessellate><coordinates>'+kc(t.pas)+' '+kc(t.cible)+'</coordinates></LineString></Placemark>');
-      pm.push('<Placemark><name>Zone de sécurité '+xml(t.n)+'</name><styleUrl>#zone</styleUrl><Polygon><outerBoundaryIs><LinearRing><coordinates>'+a.zone.concat([a.zone[0]]).map(kc).join(' ')+'</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>');
+      if(state.settings.zoneSecu) pm.push('<Placemark><name>Zone de sécurité '+xml(t.n)+'</name><styleUrl>#zone</styleUrl><Polygon><outerBoundaryIs><LinearRing><coordinates>'+a.zone.concat([a.zone[0]]).map(kc).join(' ')+'</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>');
       if(a.trajLen>0) pm.push('<Placemark><name>Trajectoire '+xml(t.n)+' (+'+fmt(a.trajLen,0)+' m)</name><styleUrl>#traj</styleUrl><LineString><tessellate>1</tessellate><coordinates>'+kc(t.cible)+' '+kc(a.trajEnd)+'</coordinates></LineString></Placemark>');
+      if(a.protLine) pm.push('<Placemark><name>Protection '+xml(t.n)+' ('+xml(PROTECTIONS[t.protection]||t.protection)+')</name><styleUrl>#prot</styleUrl><LineString><tessellate>1</tessellate><coordinates>'+a.protLine.map(kc).join(' ')+'</coordinates></LineString></Placemark>');
       if(a.largeur>0) pm.push('<Placemark><name>Ligne de tir '+xml(t.n)+' ('+fmt(a.largeur,1)+' m)</name><styleUrl>#couloir</styleUrl><Polygon><outerBoundaryIs><LinearRing><coordinates>'+a.couloir.concat([a.couloir[0]]).map(kc).join(' ')+'</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>');
     }
   });
   const k='<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>Terrain Compagnie d\'Arc de Saint-Vrain</name>'+
     '<Style id="cible"><IconStyle><color>ff00d2ff</color><scale>1.1</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/target.png</href></Icon></IconStyle></Style>'+
     '<Style id="pas"><IconStyle><color>ffffffff</color><scale>0.8</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_square.png</href></Icon></IconStyle></Style>'+
-    '<Style id="axe"><LineStyle><color>ff3fd2ff</color><width>3</width></LineStyle></Style>'+
+    '<Style id="axe"><LineStyle><color>ff84dc3d</color><width>3</width></LineStyle></Style>'+
     '<Style id="zone"><LineStyle><color>cc3d4dff</color><width>1.5</width></LineStyle><PolyStyle><color>333d4dff</color></PolyStyle></Style>'+
-    '<Style id="traj"><LineStyle><color>ff3fd2ff</color><width>2</width></LineStyle></Style>'+
-    '<Style id="couloir"><LineStyle><color>b33fd2ff</color><width>1</width></LineStyle><PolyStyle><color>333fd2ff</color></PolyStyle></Style>'+
+    '<Style id="prot"><LineStyle><color>fff6b629</color><width>5</width></LineStyle></Style>'+
+    '<Style id="traj"><LineStyle><color>ff84dc3d</color><width>2</width></LineStyle></Style>'+
+    '<Style id="couloir"><LineStyle><color>b384dc3d</color><width>1</width></LineStyle><PolyStyle><color>3384dc3d</color></PolyStyle></Style>'+
     '<Style id="perim"><LineStyle><color>ffffffff</color><width>2.5</width></LineStyle><PolyStyle><fill>0</fill></PolyStyle></Style>'+
     pm.join('')+'</Document></kml>';
   download('terrain-saint-vrain-'+stamp()+'.kml','application/vnd.google-earth.kml+xml',k);
@@ -803,13 +841,14 @@ function exportGeoJSON(){
   const f=[];
   if(state.perimetre.length>=3) f.push({type:'Feature',properties:{type:'perimetre'},geometry:{type:'Polygon',coordinates:[state.perimetre.concat([state.perimetre[0]]).map(ll2)]}});
   state.targets.forEach(t=>{
-    const a=analyse(t), props={n:t.n,buttes:t.buttes,taille_cm:t.taille,distance_inventaire:t.dAct,distance_envisagee:t.dEnv,a_faire:t.faire,a_reparer:t.reparer};
+    const a=analyse(t), props={n:t.n,buttes:t.buttes,taille_cm:t.taille,distance_inventaire:t.dAct,distance_envisagee:t.dEnv,a_faire:t.faire,a_reparer:t.reparer,protection:t.protection||''};
     if(t.cible) f.push({type:'Feature',properties:Object.assign({type:'cible',altitude:t.zCible},props),geometry:{type:'Point',coordinates:ll2(t.cible)}});
     if(t.pas) f.push({type:'Feature',properties:{type:'pas_de_tir',n:t.n,altitude:t.zPas},geometry:{type:'Point',coordinates:ll2(t.pas)}});
     if(a.placed){
       f.push({type:'Feature',properties:{type:'axe',n:t.n,distance_mesuree:+a.dist.toFixed(1),azimut:+a.az.toFixed(0)},geometry:{type:'LineString',coordinates:[ll2(t.pas),ll2(t.cible)]}});
-      f.push({type:'Feature',properties:{type:'zone_securite',n:t.n},geometry:{type:'Polygon',coordinates:[a.zone.concat([a.zone[0]]).map(ll2)]}});
+      if(state.settings.zoneSecu) f.push({type:'Feature',properties:{type:'zone_securite',n:t.n},geometry:{type:'Polygon',coordinates:[a.zone.concat([a.zone[0]]).map(ll2)]}});
       if(a.trajLen>0) f.push({type:'Feature',properties:{type:'trajectoire',n:t.n,longueur:a.trajLen},geometry:{type:'LineString',coordinates:[ll2(t.cible),ll2(a.trajEnd)]}});
+      if(a.protLine) f.push({type:'Feature',properties:{type:'protection',n:t.n,protection:t.protection},geometry:{type:'LineString',coordinates:a.protLine.map(ll2)}});
       if(a.largeur>0) f.push({type:'Feature',properties:{type:'ligne_de_tir',n:t.n,largeur:a.largeur},geometry:{type:'Polygon',coordinates:[a.couloir.concat([a.couloir[0]]).map(ll2)]}});
     }
   });
@@ -817,11 +856,11 @@ function exportGeoJSON(){
 }
 function csvCell(v){v=String(v==null?'':v);return /[",;\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}
 function exportCSV(){
-  const head=CSV_HEAD.concat(['Distance mesurée (m)','Latitude cible','Longitude cible','Latitude pas','Longitude pas','Largeur ligne de tir (m)','Trajectoire derrière cible (m)']);
+  const head=CSV_HEAD.concat(['Distance mesurée (m)','Latitude cible','Longitude cible','Latitude pas','Longitude pas','Largeur ligne de tir (m)','Trajectoire derrière cible (m)','Protection derrière cible']);
   const rows=state.targets.map(t=>{
     const a=analyse(t);
     return [t.n,t.buttes,t.taille,t.dAct,t.dEnv,t.faire,t.reparer,a.placed?a.dist.toFixed(1):'',
-      t.cible?t.cible[0].toFixed(7):'',t.cible?t.cible[1].toFixed(7):'',t.pas?t.pas[0].toFixed(7):'',t.pas?t.pas[1].toFixed(7):'',t.largeur,t.trajLen].map(csvCell).join(',');
+      t.cible?t.cible[0].toFixed(7):'',t.cible?t.cible[1].toFixed(7):'',t.pas?t.pas[0].toFixed(7):'',t.pas?t.pas[1].toFixed(7):'',t.largeur,t.trajLen,PROTECTIONS[t.protection||'']||t.protection].map(csvCell).join(',');
   });
   download('terrain-saint-vrain-'+stamp()+'.csv','text/csv;charset=utf-8','﻿'+[head.map(csvCell).join(',')].concat(rows).join('\r\n'));
 }
@@ -865,6 +904,11 @@ function importCSV(text){
     let t=state.targets.find(x=>String(x.n).trim()===n);
     if(!t){t={id:'t'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),n:n,cible:null,pas:null,zCible:null,zPas:null};FIELDS.forEach(k=>{if(t[k]==null)t[k]='';});state.targets.push(t);added++;}else updated++;
     Object.keys(col).forEach(k=>{if(col[k]>=0&&r[col[k]]!=null) t[k]=r[col[k]].trim();});
+    const iProt=idx('protection');
+    if(iProt>=0&&r[iProt]!=null){
+      const v=r[iProt].trim(), key=Object.keys(PROTECTIONS).find(k=>PROTECTIONS[k].toLowerCase()===v.toLowerCase()||k===v.toLowerCase());
+      t.protection=key!=null?key:(v?'autre':'');
+    }
     const g=i=>i>=0?parseFloat(r[i]):NaN;
     if(!isNaN(g(iLat))&&!isNaN(g(iLng))) t.cible=[g(iLat),g(iLng)];
     if(!isNaN(g(iPLat))&&!isNaN(g(iPLng))) t.pas=[g(iPLat),g(iPLng)];
