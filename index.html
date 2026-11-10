@@ -3,6 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f4d36">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Terrain Arc">
 <title>Terrain Saint-Vrain</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -34,7 +38,7 @@ button{cursor:pointer}
 
 .app{display:grid;height:100%;grid-template-columns:minmax(300px,390px) 1fr;grid-template-rows:auto 1fr;grid-template-areas:"bar bar" "side map"}
 .bar{grid-area:bar;display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;background:var(--panel);border-bottom:1px solid var(--line);
-  padding-block:10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  padding-block:10px;padding-top:max(10px,env(safe-area-inset-top,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 .brand{display:flex;flex-direction:column;line-height:1.1;margin-right:auto;min-width:0}
 .brand small{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .brand strong{font:700 22px/1.05 var(--f-num);letter-spacing:.01em}
@@ -133,10 +137,25 @@ button{cursor:pointer}
 .leaflet-container{font:13px var(--f-body)}
 
 @media (max-width:860px){
-  .app{height:auto;min-height:100%;grid-template-columns:1fr;grid-template-rows:auto 58svh auto;grid-template-areas:"bar" "map" "side"}
+  /* Telephone : en-tete compact, carte collee en haut de l'ecran pendant qu'on fait defiler la fiche et la liste */
+  .app{height:auto;min-height:100%;grid-template-columns:1fr;grid-template-rows:auto 46svh auto;grid-template-areas:"bar" "map" "side"}
+  .mapwrap{position:sticky;top:env(safe-area-inset-top,0px);z-index:900;height:46svh;box-shadow:0 4px 12px rgba(0,0,0,.18)}
   .side{border-right:0;overflow:visible}
-  .banner{max-width:calc(100% - 24px);top:auto;bottom:12px}
+  #detail-slot{scroll-margin-top:calc(46svh + 8px)}
+  .banner{max-width:calc(100% - 24px);width:max-content;top:auto;bottom:28px;padding:6px 6px 6px 10px;gap:6px;font-size:13px;line-height:1.3}
+  .banner .btn{height:28px;padding:0 8px;font-size:12px}
+  .bar{position:relative;gap:8px;padding-block:8px}
+  .brand small{display:none}
+  .brand strong{font-size:20px}
+  .bar .btn{height:34px;padding:0 10px;font-size:13px}
+  .saved{order:6;flex-basis:100%}
   .search{max-width:none;order:5;flex-basis:100%}
+  .menu{position:static}
+  .menu-pop{left:max(16px,env(safe-area-inset-left,0px));right:max(16px,env(safe-area-inset-right,0px));top:auto;margin-top:6px}
+  .menu-pop button{padding:12px 10px}
+  /* 16px minimum : evite le zoom automatique d'iOS quand on touche un champ */
+  input,textarea,select{font-size:16px!important}
+  .item{padding-block:11px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -349,6 +368,9 @@ function analyse(t){
   r.trajEnd=unproj(o,{x:fwd.x*tl,y:fwd.y*tl});
   r.couloir=[{x:P.x+side.x*h,y:P.y+side.y*h},{x:P.x-side.x*h,y:P.y-side.y*h},
              {x:fwd.x*tl-side.x*h,y:fwd.y*tl-side.y*h},{x:fwd.x*tl+side.x*h,y:fwd.y*tl+side.y*h}].map(v=>unproj(o,v));
+  /* Meme couloir coupe en deux au niveau de la cible : ligne de tir (pas -> cible) et trajectoire (cible -> bout) */
+  r.couloirAxe=[r.couloir[0],r.couloir[1],unproj(o,{x:-side.x*h,y:-side.y*h}),unproj(o,{x:side.x*h,y:side.y*h})];
+  r.couloirTraj=[r.couloirAxe[3],r.couloirAxe[2],r.couloir[2],r.couloir[3]];
   /* Protection derriere la cible : barre perpendiculaire a l'axe, un peu plus large que la ligne de tir */
   if(t.protection&&t.protection!=='aucune'){
     const ph=Math.max(h+1.5,4);
@@ -429,12 +451,17 @@ function drawGeo(t){
   const g=ly.geo; g.clearLayers();
   const a=analyse(t); if(!a.placed) return;
   const isSel=sel===t.id;
-  const col=a.status==='bad'?MAPC.bad:a.status==='warn'?MAPC.warn:MAPC.axis;
+  /* La ligne de tir (pas -> cible) a sa propre couleur : verte, orange seulement si la distance s'ecarte de l'inventaire.
+     Le rouge est reserve a la trajectoire derriere la cible quand elle sort du terrain. */
+  const axisWarn=a.ecart!=null&&Math.abs(a.ecart)>(+state.settings.tolerance||0);
+  const col=axisWarn?MAPC.warn:MAPC.axis;
   if(state.settings.zoneSecu)
     L.polygon(a.zone,{color:MAPC.zone,weight:1.5,opacity:.8,fillColor:MAPC.zone,fillOpacity:isSel?.22:.1,dashArray:'5 5',interactive:false}).addTo(g);
-  const tcol=a.trajHors?MAPC.bad:col;
-  if(a.largeur>0)
-    L.polygon(a.couloir,{color:tcol,weight:1,opacity:.75,fillColor:tcol,fillOpacity:isSel?.2:.09,interactive:false}).addTo(g);
+  const tcol=a.trajHors?MAPC.bad:MAPC.axis;
+  if(a.largeur>0){
+    L.polygon(a.couloirAxe,{color:col,weight:1,opacity:.75,fillColor:col,fillOpacity:isSel?.2:.09,interactive:false}).addTo(g);
+    if(a.trajLen>0) L.polygon(a.couloirTraj,{color:tcol,weight:1,opacity:.75,fillColor:tcol,fillOpacity:isSel?.2:.09,interactive:false}).addTo(g);
+  }
   if(a.trajLen>0){
     L.polyline([t.cible,a.trajEnd],{color:'#000',weight:isSel?6:4,opacity:.3,dashArray:'10 6',interactive:false}).addTo(g);
     L.polyline([t.cible,a.trajEnd],{color:tcol,weight:isSel?3:2,opacity:1,dashArray:'10 6',interactive:false}).addTo(g);
@@ -445,13 +472,13 @@ function drawGeo(t){
     L.polyline(a.protLine,{pane:'prot',renderer:protRenderer,color:MAPC.prot,weight:isSel?7:5,opacity:1,lineCap:'butt',interactive:false}).addTo(g);
   }
   if(a.ghost){
-    L.polyline([t.pas,a.ghost],{color:col,weight:2,dashArray:'2 7',opacity:.95,interactive:false}).addTo(g);
+    L.polyline([t.pas,a.ghost],{color:a.envPossible===false?MAPC.bad:col,weight:2,dashArray:'2 7',opacity:.95,interactive:false}).addTo(g);
     label(a.ghost,'<div class="mk-ghost">'+fmt(a.dEnv,0)+' m envisagé</div>',200).addTo(g);
   }
   L.polyline([t.pas,t.cible],{color:'#000',weight:isSel?7:5,opacity:.35,interactive:false}).addTo(g);
   L.polyline([t.pas,t.cible],{color:col,weight:isSel?4:3,opacity:1,interactive:false}).addTo(g);
   const mid=[(t.pas[0]+t.cible[0])/2,(t.pas[1]+t.cible[1])/2];
-  label(mid,'<div class="mk-dist s-'+a.status+'">'+fmt(a.dist)+' m</div>',300).addTo(g);
+  label(mid,'<div class="mk-dist s-'+(axisWarn?'warn':'ok')+'">'+fmt(a.dist)+' m</div>',300).addTo(g);
 }
 function redrawAll(){state.targets.forEach(ensure);}
 
@@ -652,7 +679,8 @@ function select(id,fly){
     if(pts.length===2) map.fitBounds(L.latLngBounds(pts).pad(0.5),{maxZoom:20});
     else if(pts.length) map.setView(pts[0],Math.max(map.getZoom(),18));
   }
-  if(window.matchMedia('(max-width:860px)').matches&&!fly) $('#detail-slot').scrollIntoView({behavior:'smooth',block:'start'});
+  if(window.matchMedia('(max-width:860px)').matches) $('#detail-slot').scrollIntoView({behavior:'smooth',block:'start'});
+  else $('.side').scrollTo({top:0,behavior:'smooth'});
 }
 function renderDetail(){
   const slot=$('#detail-slot'), t=byId(sel);
