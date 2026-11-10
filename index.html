@@ -327,7 +327,7 @@ const DEFAULT_SETTINGS={profondeur:50,demiLargeur:10,ouverture:10,tolerance:2,zo
 const KEY='terrainArc.saintvrain.v1';
 /* Adresse du script Google Apps Script du Sheet (se termine par /exec).
    Laissee vide : pas de synchronisation, l'appli fonctionne comme avant (appareil + terrain.json). */
-const SYNC_URL='https://script.google.com/macros/s/AKfycbxblyJ1r7HQl8PDfOU3w4d5NmR8NkV_iBgUFYAJV1HQd2ccEGlR0C8J0Rho2MSD0_1qQQ/exec';
+const SYNC_URL='';
 const CENTER=[48.5436,2.3320];
 const MAPC={parc:'#c77dff',axis:'#3ddc84',prot:'#29b6f6',warn:'#ff9f1c',bad:'#ff4d3d',zone:'#ff4d3d',perim:'#ffffff'};
 const FIELDS=['n','buttes','taille','dAct','dEnv','faire','reparer','trajLen','largeur','protection','pCoul'];
@@ -522,7 +522,18 @@ function icPas(t,c){
 }
 function label(pos,html,z){return L.marker(pos,{icon:L.divIcon({className:'',html:html,iconSize:null}),interactive:false,keyboard:false,zIndexOffset:z||0});}
 
+/* Avec un parcours affiche, seules ses cibles sont dessinees (plus la cible ouverte ou en cours de placement) */
+function visibleOnMap(t){
+  if(state.parcShow===false) return true;
+  if(t.id===sel||(mode&&mode.id===t.id)) return true;
+  return parcoursActif().cibles.indexOf(t.id)>=0;
+}
+function fitParcours(){
+  const pts=parcoursActif().cibles.map(byId).filter(Boolean).flatMap(t=>[t.cible,t.pas].filter(Boolean));
+  if(pts.length>1) map.fitBounds(L.latLngBounds(pts).pad(0.15),{maxZoom:19}); else if(pts.length) map.setView(pts[0],18);
+}
 function ensure(t){
+  if(!visibleOnMap(t)){dropLayers(t.id);return;}
   let ly=layers[t.id];
   if(!ly) ly=layers[t.id]={cible:null,pas:null,geo:L.layerGroup().addTo(map)};
   ['cible','pas'].forEach(k=>{
@@ -691,6 +702,40 @@ function drawParcours(){
 }
 map.on('zoomend',drawParcours);
 
+/* Troncon qui suit celui-ci dans le parcours affiche */
+function segSuivant(key){
+  const c=parcoursActif().cibles, i=c.findIndex((id,k)=>k<c.length-1&&id+'>'+c[k+1]===key);
+  return (i>=0&&i+2<c.length)?c[i+1]+'>'+c[i+2]:null;
+}
+/* Enregistrement du chemin reel en marchant : un point tous les 4 m, si la precision est suffisante */
+const GPS_ACC_MAX=20, GPS_PAS=4;
+function startTrack(){
+  if(!navigator.geolocation){toast('La géolocalisation n\'est pas disponible sur cet appareil.');return;}
+  if(watchId!=null) navigator.geolocation.clearWatch(watchId);
+  mode.gps=true; mode.gpsAcc=null;
+  watchId=navigator.geolocation.watchPosition(pos=>{
+    if(!mode||mode.type!=='trace'){stopTrack();return;}
+    mode.gpsAcc=pos.coords.accuracy; showMe(pos);
+    if(pos.coords.accuracy<=GPS_ACC_MAX){
+      const v=[pos.coords.latitude,pos.coords.longitude], last=mode.pts[mode.pts.length-1];
+      if(!last||dist(last,v)>=GPS_PAS){mode.pts.push(v);drawParcours();}
+    }
+    renderBanner();
+  },err=>{
+    /* Refus : on arrete. Perte passagere du signal (sous les arbres) : on continue et on l'affiche */
+    if(err.code===1){toast('Accès à la position refusé dans le navigateur.');stopTrack();}
+    else if(mode&&mode.type==='trace') mode.gpsAcc=-1;
+    renderBanner();
+  },
+  {enableHighAccuracy:true,maximumAge:0,timeout:30000});
+  try{if(navigator.wakeLock) navigator.wakeLock.request('screen').then(w=>{wakeLock=w;}).catch(()=>{});}catch(e){}
+}
+function stopTrack(){
+  if(watchId!=null&&navigator.geolocation) navigator.geolocation.clearWatch(watchId);
+  watchId=null; if(mode&&mode.type==='trace') mode.gps=false;
+  if(wakeLock){try{wakeLock.release();}catch(e){} wakeLock=null;}
+}
+
 /* Denivele d'un troncon par le profil altimetrique IGN */
 async function altiSeg(pts){
   const n=Math.max(2,Math.min(200,Math.ceil(pathLen(pts)/5)+1));
@@ -742,7 +787,9 @@ function fetchElev(t){
 }
 
 /* ---------- Modes de placement ---------- */
+let watchId=null, wakeLock=null;
 function setMode(m){
+  if(!m||m.type!=='trace') stopTrack();
   mode=m;
   $('#map').classList.toggle('placing',!!m);
   renderBanner(); drawPerim(); drawParcours(); updatePlaceButtons();
@@ -777,9 +824,13 @@ function renderBanner(){
       '<button class="btn small" data-b="cancel" type="button">Annuler</button>';
   }else if(mode.type==='trace'){
     const ab=mode.key.split('>').map(id=>byId(id)), n=mode.pts.length;
-    b.innerHTML='<span>Chemin de la cible '+esc(ab[0]?ab[0].n:'')+' à la cible '+esc(ab[1]?ab[1].n:'')+' : cliquez les points de passage ('+n+')</span>'+
+    const gpsTxt=mode.gps?(mode.gpsAcc==null?'GPS : recherche...':mode.gpsAcc<0?'Signal GPS perdu, attente...':mode.gpsAcc>GPS_ACC_MAX?'GPS trop imprécis (±'+fmt(mode.gpsAcc,0)+' m), attente...':'GPS actif ±'+fmt(mode.gpsAcc,0)+' m'):'';
+    b.innerHTML='<span>Chemin de la cible '+esc(ab[0]?ab[0].n:'')+' à la cible '+esc(ab[1]?ab[1].n:'')+' : '+
+      (mode.gps?'marchez, les points s\'ajoutent seuls ('+n+'). '+gpsTxt:'cliquez les points de passage ('+n+') ou suivez votre position')+'</span>'+
+      '<button class="btn small" data-b="gps" type="button">'+(mode.gps?'Arrêter le GPS':'Suivre ma position')+'</button>'+
       '<button class="btn small" data-b="undo" type="button"'+(n?'':' disabled')+'>Retirer le dernier</button>'+
       '<button class="btn small primary" data-b="done" type="button">Terminer</button>'+
+      (segSuivant(mode.key)?'<button class="btn small primary" data-b="next" type="button">Terminer et tronçon suivant</button>':'')+
       '<button class="btn small" data-b="cancel" type="button">Annuler</button>';
   }else{
     const t=byId(mode.id);
@@ -793,11 +844,16 @@ $('#banner').addEventListener('click',e=>{
   const a=k.dataset.b;
   if(mode&&mode.type==='trace'){
     if(a==='undo'){mode.pts.pop();renderBanner();drawParcours();}
-    else if(a==='done'){
-      const q=materialize(parcoursActif());
-      if(mode.pts.length) q.via[mode.key]=mode.pts.slice(); else delete q.via[mode.key];
-      delete q.alti[mode.key];
-      setMode(null); save(); renderParcours(); toast('Chemin enregistré');
+    else if(a==='gps'){if(mode.gps) stopTrack(); else startTrack(); renderBanner();}
+    else if(a==='done'||a==='next'){
+      const q=materialize(parcoursActif()), key=mode.key, gpsOn=!!mode.gps;
+      if(mode.pts.length) q.via[key]=mode.pts.slice(); else delete q.via[key];
+      delete q.alti[key];
+      const suivant=a==='next'?segSuivant(key):null;
+      if(suivant){
+        mode={type:'trace',key:suivant,pts:[],gps:gpsOn,gpsAcc:mode.gpsAcc};
+        save(); renderParcours(); renderBanner(); drawParcours(); toast('Chemin enregistré, tronçon suivant');
+      }else{setMode(null); save(); renderParcours(); toast('Chemin enregistré');}
     }
     else if(a==='cancel') setMode(null);
     return;
@@ -937,7 +993,7 @@ function renderParcours(){
   const stat=(k,v)=>'<div><dt>'+k+'</dt><dd>'+v+'</dd></div>';
   let h='<div class="parc-head"><select id="parc-sel" aria-label="Parcours affiché">'+
     list.map(x=>'<option value="'+esc(x.id)+'"'+(x.id===q.id?' selected':'')+'>'+esc(x.nom)+'</option>').join('')+'</select>'+
-    '<label class="chk"><input type="checkbox" id="parc-show"'+(state.parcShow===false?'':' checked')+'> Afficher sur la carte</label></div>';
+    '<label class="chk"><input type="checkbox" id="parc-show"'+(state.parcShow===false?'':' checked')+'> Afficher sur la carte (seulement ses cibles)</label></div>';
   if(ed) h+='<div class="parc-tools"><label class="grow">Nom du parcours<input id="parc-nom" maxlength="60" value="'+esc(q.nom)+'"></label>'+
     '<button class="btn small" type="button" data-p="new">Nouveau parcours</button>'+
     (q.virtuel?'':'<button class="btn small danger'+(parcDelArmed?' armed':'')+'" type="button" data-p="del">'+(parcDelArmed?'Confirmer la suppression':'Supprimer')+'</button>')+'</div>';
@@ -945,7 +1001,7 @@ function renderParcours(){
     stat('Dénivelé',st.altiOk?'+'+fmt(st.dp,0)+' / −'+fmt(st.dm,0)+' m':'—')+stat('Marche',fmtMin(st.temps))+'</dl>';
   const notes=[];
   if(st.manquants) notes.push(st.manquants+' tronçon'+(st.manquants>1?'s':'')+' sans mesure : cible ou pas de tir pas encore placé.');
-  notes.push('Marche estimée à 4 km/h'+(st.altiOk?', montée comprise':'')+', hors temps de tir. Les tirets sont des lignes droites, le trait plein un chemin dessiné.');
+  notes.push('Marche estimée à 4 km/h'+(st.altiOk?', montée comprise':'')+', hors temps de tir. Tirets : ligne droite théorique. Trait plein : chemin réel, dessiné à la main ou enregistré en marchant avec « Dessiner le chemin » puis « Suivre ma position ».');
   h+='<p class="hint">'+notes.join(' ')+'</p>';
   if(ed&&st.segs.some(Boolean)) h+='<div class="parc-tools"><button class="btn small" type="button" data-p="alti" id="parc-alti">'+(st.altiOk?'Recalculer le dénivelé':'Calculer le dénivelé')+'</button></div>';
   h+='<ol class="parc-list">'+q.cibles.map((id,i)=>{
@@ -1001,11 +1057,11 @@ $('#parc-body').addEventListener('click',e=>{
     else if(a==='straight'){delete q.via[b.dataset.key];delete q.alti[b.dataset.key];}
     prune(q);
   }
-  save(); renderParcours(); drawParcours();
+  save(); renderParcours(); redrawAll(); drawParcours();
 });
 $('#parc-body').addEventListener('change',e=>{
-  if(e.target.id==='parc-sel'){state.parcActif=e.target.value;parcDelArmed=false;localSave();renderParcours();drawParcours();}
-  else if(e.target.id==='parc-show'){state.parcShow=e.target.checked;localSave();drawParcours();}
+  if(e.target.id==='parc-sel'){state.parcActif=e.target.value;parcDelArmed=false;localSave();renderParcours();redrawAll();drawParcours();fitParcours();}
+  else if(e.target.id==='parc-show'){state.parcShow=e.target.checked;localSave();redrawAll();drawParcours();}
 });
 $('#parc-body').addEventListener('input',e=>{
   if(e.target.id!=='parc-nom'||!canEdit()) return;
