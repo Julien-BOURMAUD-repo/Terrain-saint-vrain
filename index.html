@@ -132,7 +132,10 @@ button{cursor:pointer}
 .parc-head,.parc-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .parc-head select,.parc-tools select,.parc-tools input{border:1px solid var(--line);border-radius:5px;background:var(--soft);color:var(--ink);padding:6px 8px;min-width:0}
 .parc-head select{flex:1 1 160px}
-.parc-tools .grow{flex:1 1 160px;display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
+.parc-tools .grow,.parc-new>.grow{flex:1 1 160px;display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
+.parc-new>.grow{flex:none}
+.parc-new{display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:10px}
+.parc-new select{border:1px solid var(--line);border-radius:5px;background:var(--soft);color:var(--ink);padding:6px 8px}
 .chk{display:inline-flex;align-items:center;gap:6px;font-size:13px}
 .parc-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden;margin:0}
 .parc-stats div{background:var(--panel);padding:7px 8px;min-width:0}
@@ -330,7 +333,8 @@ const KEY='terrainArc.saintvrain.v1';
 const SYNC_URL='';
 const CENTER=[48.5436,2.3320];
 const MAPC={parc:'#c77dff',axis:'#3ddc84',prot:'#29b6f6',warn:'#ff9f1c',bad:'#ff4d3d',zone:'#ff4d3d',perim:'#ffffff'};
-const FIELDS=['n','buttes','taille','dAct','dEnv','faire','reparer','trajLen','largeur','protection','pCoul'];
+const FIELDS=['n','buttes','taille','dAct','dEnv','faire','reparer','trajLen','largeur','protection','pCoul','parc'];
+const PARC_TYPES={'':'Sans type','3d':'3D',nature:'Nature',campagne:'Campagne',entrainement:'Entraînement',autre:'Autre'};
 const PROTECTIONS={'':'Non renseignée','aucune':'Aucune','filet':'Filet pare-flèches','butte':'Butte de terre','mur':'Mur / palissade','talus':'Talus naturel','autre':'Autre'};
 const COULEURS={rouge:{l:'Rouge',hex:'#e53935',txt:'#fff'},bleu:{l:'Bleu',hex:'#1e88e5',txt:'#fff'},blanc:{l:'Blanc',hex:'#ffffff',txt:'#111'},jaune:{l:'Jaune',hex:'#fdd835',txt:'#111'}};
 const COUL_LABELS={rouge:'Rouge',bleu:'Bleu',blanc:'Blanc',jaune:'Jaune'};
@@ -364,10 +368,44 @@ function normalize(s){
     t.autres=(Array.isArray(t.autres)?t.autres:[]).filter(q=>q&&Array.isArray(q.pos)).slice(0,MAX_AUTRES).map(q=>({c:COULEURS[q.c]?q.c:'blanc',pos:q.pos}));
   });
   s.parcours=(Array.isArray(s.parcours)?s.parcours:[]).filter(q=>q&&q.id).map(q=>({id:String(q.id),nom:String(q.nom||'Parcours'),
+    type:PARC_TYPES[q.type]!=null?q.type:'',
     cibles:Array.isArray(q.cibles)?q.cibles.map(String):[],via:q.via&&typeof q.via==='object'?q.via:{},alti:q.alti&&typeof q.alti==='object'?q.alti:{}}));
+  if(!s.parcours.length) s.parcours=[{id:'p1',nom:'Parcours principal',type:'',cibles:[],via:{},alti:{}}];
+  attribuerCibles(s);
   return s;
 }
-let state=load()||fresh();
+/* Chaque cible appartient a un seul parcours (t.parc) ; parcours.cibles donne l'ordre de passage de ses cibles. */
+function attribuerCibles(s){
+  const ids={}, P={};
+  s.targets.forEach(t=>{ids[t.id]=t;}); s.parcours.forEach(q=>{P[q.id]=q;});
+  s.targets.forEach(t=>{if(!t.parc||!P[t.parc]) t.parc='';});
+  /* Version precedente : un parcours pouvait reprendre les cibles d'un autre. Chaque reprise devient une copie
+     propre a ce parcours, avec un identifiant deterministe pour que tous les appareils fassent la meme conversion. */
+  s.parcours.forEach(q=>{
+    const ren={};
+    q.cibles=q.cibles.map(id=>{
+      const t=ids[id]; if(!t) return null;
+      if(!t.parc){t.parc=q.id;return id;}
+      if(t.parc===q.id) return id;
+      const cid=id+'@'+q.id;
+      if(!ids[cid]){const c=JSON.parse(JSON.stringify(t)); c.id=cid; c.parc=q.id; s.targets.push(c); ids[cid]=c;}
+      ren[id]=cid; return cid;
+    }).filter(Boolean);
+    ['via','alti'].forEach(k=>Object.keys(q[k]).forEach(key=>{
+      const ab=key.split('>'), nk=(ren[ab[0]]||ab[0])+'>'+(ren[ab[1]]||ab[1]);
+      if(nk!==key){q[k][nk]=q[k][key]; delete q[k][key];}
+    }));
+  });
+  s.targets.forEach(t=>{if(!t.parc) t.parc=s.parcours[0].id;});
+  s.parcours.forEach(q=>{
+    q.cibles=q.cibles.filter((id,i,a)=>ids[id]&&ids[id].parc===q.id&&a.indexOf(id)===i);
+    s.targets.filter(t=>t.parc===q.id&&q.cibles.indexOf(t.id)<0).sort(natCmp).forEach(t=>q.cibles.push(t.id));
+  });
+}
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
+function cloneCible(t,parcId){const c=JSON.parse(JSON.stringify(t)); c.id='t'+uid(); c.parc=parcId; return c;}
+function nomParcours(id){const q=state.parcours.find(x=>x.id===id); return q?q.nom:'';}
+let state=load()||normalize(fresh());
 let sel=null, mode=null, filter='all', perimBackup=null, parcDelArmed=false, altiRunning=false;
 
 let saveTimer=null;
@@ -522,12 +560,8 @@ function icPas(t,c){
 }
 function label(pos,html,z){return L.marker(pos,{icon:L.divIcon({className:'',html:html,iconSize:null}),interactive:false,keyboard:false,zIndexOffset:z||0});}
 
-/* Avec un parcours affiche, seules ses cibles sont dessinees (plus la cible ouverte ou en cours de placement) */
-function visibleOnMap(t){
-  if(state.parcShow===false) return true;
-  if(t.id===sel||(mode&&mode.id===t.id)) return true;
-  return parcoursActif().cibles.indexOf(t.id)>=0;
-}
+/* Seules les cibles du parcours choisi sont dessinees */
+function visibleOnMap(t){return t.parc===parcoursActif().id;}
 function fitParcours(){
   const pts=parcoursActif().cibles.map(byId).filter(Boolean).flatMap(t=>[t.cible,t.pas].filter(Boolean));
   if(pts.length>1) map.fitBounds(L.latLngBounds(pts).pad(0.15),{maxZoom:19}); else if(pts.length) map.setView(pts[0],18);
@@ -635,12 +669,9 @@ function natCmp(a,b){
   if(x!=null&&y!=null&&x!==y) return x-y;
   return String(a.n).localeCompare(String(b.n),'fr',{numeric:true});
 }
-function parcoursList(){
-  if(state.parcours.length) return state.parcours;
-  return [{id:'p1',nom:'Parcours principal',cibles:state.targets.slice().sort(natCmp).map(t=>t.id),via:{},alti:{},virtuel:true}];
-}
+function parcoursList(){return state.parcours;}
 function parcoursActif(){const l=parcoursList();return l.find(q=>q.id===state.parcActif)||l[0];}
-function materialize(q){if(q.virtuel){delete q.virtuel;state.parcours=[q];state.parcActif=q.id;}return q;}
+function materialize(q){return q;}
 function prune(q){
   const keys={}; for(let i=0;i<q.cibles.length-1;i++) keys[q.cibles[i]+'>'+q.cibles[i+1]]=1;
   ['via','alti'].forEach(k=>Object.keys(q[k]).forEach(x=>{if(!keys[x]) delete q[k][x];}));
@@ -940,8 +971,9 @@ $('#results').addEventListener('click',e=>{
 document.addEventListener('click',e=>{if(!e.target.closest('.search')) $('#results').hidden=true; if(!e.target.closest('#menu')) $('#menu').open=false; if(!e.target.closest('#acces')) $('#acces').open=false;});
 
 /* ---------- Liste et resume ---------- */
+function ciblesActives(){return parcoursActif().cibles.map(byId).filter(Boolean);}
 function renderSummary(){
-  const all=state.targets.map(t=>({t:t,a:analyse(t)}));
+  const all=ciblesActives().map(t=>({t:t,a:analyse(t)}));
   const placed=all.filter(x=>x.a.placed).length;
   const alerts=all.filter(x=>x.a.status==='warn'||x.a.status==='bad').length;
   const rep=all.reduce((n,x)=>n+lines(x.t.reparer).length,0);
@@ -964,7 +996,8 @@ function chipFor(a){
 }
 function renderList(){
   renderSummary();
-  const rows=state.targets.map(t=>{
+  const actives=ciblesActives();
+  const rows=actives.map(t=>{
     const a=analyse(t); if(!matches(t,a)) return '';
     const env=(t.dEnv&&t.dEnv!==t.dAct&&String(t.dEnv).trim()!=='?')?' → '+esc(t.dEnv):'';
     const nRep=lines(t.reparer).length;
@@ -974,7 +1007,8 @@ function renderList(){
       '<span class="it-main"><span class="it-title">Cible '+esc(t.n)+'</span><span class="it-meta">'+meta+'</span></span>'+
       chipFor(a)+'</button></li>';
   }).join('');
-  $('#list').innerHTML=rows||'<li class="pad hint" style="padding-block:14px">Aucune cible dans ce filtre.</li>';
+  $('#list').innerHTML=rows||'<li class="pad hint" style="padding-block:14px">'+(actives.length?'Aucune cible dans ce filtre.':
+    'Aucune cible dans ce parcours. Ajoutez-en une, ou copiez celles d\'un autre parcours depuis le panneau Parcours.')+'</li>';
   drawParcours(); if(!document.activeElement||document.activeElement.id!=='parc-nom') renderParcours();
 }
 $('#list').addEventListener('click',e=>{const b=e.target.closest('[data-id]');if(b) select(b.dataset.id,true);});
@@ -986,17 +1020,37 @@ $('#filters').addEventListener('click',e=>{
 });
 
 /* ---------- Panneau parcours ---------- */
+let parcNewOpen=false;
+function parcLabel(x){return x.nom+(x.type&&x.nom!==PARC_TYPES[x.type]?' · '+PARC_TYPES[x.type]:'');}
+function switchParcours(id){
+  if(mode) setMode(null);
+  state.parcActif=id; sel=null; parcDelArmed=false; parcNewOpen=false; localSave();
+  Object.keys(layers).forEach(dropLayers); redrawAll(); renderList(); renderDetail(); drawParcours(); fitParcours();
+}
 function renderParcours(){
   const box=$('#parc-body'); if(!box) return;
   const list=parcoursList(), q=parcoursActif(), st=parcoursStats(q), ed=canEdit();
-  $('#parc-sum').textContent=q.nom+' · '+q.cibles.length+' cible'+(q.cibles.length>1?'s':'')+' · '+fmtLen(st.len);
+  const typeOpts=cur=>Object.keys(PARC_TYPES).map(k=>'<option value="'+k+'"'+(k===cur?' selected':'')+'>'+PARC_TYPES[k]+'</option>').join('');
+  $('#parc-sum').textContent=parcLabel(q)+' · '+q.cibles.length+' cible'+(q.cibles.length>1?'s':'')+' · '+fmtLen(st.len);
   const stat=(k,v)=>'<div><dt>'+k+'</dt><dd>'+v+'</dd></div>';
   let h='<div class="parc-head"><select id="parc-sel" aria-label="Parcours affiché">'+
-    list.map(x=>'<option value="'+esc(x.id)+'"'+(x.id===q.id?' selected':'')+'>'+esc(x.nom)+'</option>').join('')+'</select>'+
-    '<label class="chk"><input type="checkbox" id="parc-show"'+(state.parcShow===false?'':' checked')+'> Afficher sur la carte (seulement ses cibles)</label></div>';
-  if(ed) h+='<div class="parc-tools"><label class="grow">Nom du parcours<input id="parc-nom" maxlength="60" value="'+esc(q.nom)+'"></label>'+
-    '<button class="btn small" type="button" data-p="new">Nouveau parcours</button>'+
-    (q.virtuel?'':'<button class="btn small danger'+(parcDelArmed?' armed':'')+'" type="button" data-p="del">'+(parcDelArmed?'Confirmer la suppression':'Supprimer')+'</button>')+'</div>';
+    list.map(x=>'<option value="'+esc(x.id)+'"'+(x.id===q.id?' selected':'')+'>'+esc(parcLabel(x))+'</option>').join('')+'</select>'+
+    '<label class="chk"><input type="checkbox" id="parc-show"'+(state.parcShow===false?'':' checked')+'> Afficher le chemin</label></div>';
+  if(ed){
+    h+='<div class="parc-tools"><label class="grow">Nom du parcours<input id="parc-nom" maxlength="60" value="'+esc(q.nom)+'"></label>'+
+      '<label class="grow">Discipline<select id="parc-type">'+typeOpts(q.type)+'</select></label></div>'+
+      '<div class="parc-tools"><button class="btn small'+(parcNewOpen?' primary':'')+'" type="button" data-p="new">Nouveau parcours</button>'+
+      (list.length>1?'<button class="btn small danger'+(parcDelArmed?' armed':'')+'" type="button" data-p="del">'+
+        (parcDelArmed?'Confirmer : supprimer le parcours et ses '+q.cibles.length+' cibles':'Supprimer ce parcours')+'</button>':'')+'</div>';
+    if(parcNewOpen) h+='<div class="parc-new"><div class="parc-tools">'+
+      '<label class="grow">Discipline<select id="pn-type">'+typeOpts('nature')+'</select></label>'+
+      '<label class="grow">Nom<input id="pn-nom" maxlength="60" placeholder="par défaut : la discipline"></label></div>'+
+      '<label class="grow">Cibles de départ<select id="pn-src"><option value="">Aucune : parcours vide</option>'+
+        list.map(x=>'<option value="'+esc(x.id)+'">Copie des '+x.cibles.length+' cibles de '+esc(parcLabel(x))+'</option>').join('')+'</select></label>'+
+      '<p class="hint">Les cibles copiées deviennent indépendantes : les modifier ici ne change pas l\'autre parcours.</p>'+
+      '<div class="parc-tools"><button class="btn small primary" type="button" data-p="create">Créer le parcours</button>'+
+      '<button class="btn small" type="button" data-p="new">Annuler</button></div></div>';
+  }
   h+='<dl class="parc-stats">'+stat('Cibles',q.cibles.length)+stat('Longueur',fmtLen(st.len))+
     stat('Dénivelé',st.altiOk?'+'+fmt(st.dp,0)+' / −'+fmt(st.dm,0)+' m':'—')+stat('Marche',fmtMin(st.temps))+'</dl>';
   const notes=[];
@@ -1009,8 +1063,7 @@ function renderParcours(){
     const sg=st.segs[i];
     let li='<li><div class="pl-row"><span class="pl-ord">'+(i+1)+'</span><button type="button" class="pl-name" data-p="go" data-id="'+esc(id)+'">Cible '+esc(t.n)+'</button>';
     if(ed) li+='<span class="pl-act"><button class="btn small" type="button" data-p="up" data-i="'+i+'" aria-label="Monter"'+(i?'':' disabled')+'>↑</button>'+
-      '<button class="btn small" type="button" data-p="down" data-i="'+i+'" aria-label="Descendre"'+(i<q.cibles.length-1?'':' disabled')+'>↓</button>'+
-      '<button class="btn small" type="button" data-p="rm" data-i="'+i+'" aria-label="Retirer du parcours">×</button></span>';
+      '<button class="btn small" type="button" data-p="down" data-i="'+i+'" aria-label="Descendre"'+(i<q.cibles.length-1?'':' disabled')+'>↓</button></span>';
     li+='</div>';
     if(i<q.cibles.length-1){
       li+='<div class="pl-seg">'+(sg?fmt(sg.len,0)+' m, '+(sg.dessine?'chemin dessiné':'ligne droite')+(sg.alti?', +'+fmt(sg.alti.dp,0)+' / −'+fmt(sg.alti.dm,0)+' m':''):'tronçon incomplet');
@@ -1021,11 +1074,11 @@ function renderParcours(){
     return li+'</li>';
   }).join('')+'</ol>';
   if(ed){
-    const hors=state.targets.filter(t=>q.cibles.indexOf(t.id)<0).sort(natCmp);
-    if(hors.length) h+='<div class="parc-tools"><select id="parc-add" aria-label="Cible à ajouter au parcours">'+
-      hors.map(t=>'<option value="'+esc(t.id)+'">Cible '+esc(t.n)+'</option>').join('')+'</select>'+
-      '<button class="btn small" type="button" data-p="add">Ajouter au parcours</button>'+
-      '<button class="btn small" type="button" data-p="addall">Ajouter les '+hors.length+' restantes</button></div>';
+    const autres=list.filter(x=>x.id!==q.id&&x.cibles.length);
+    h+='<div class="parc-tools"><button class="btn small" type="button" data-p="addnew">Nouvelle cible</button></div>';
+    if(autres.length) h+='<div class="parc-tools"><select id="parc-copy" aria-label="Cible à copier depuis un autre parcours">'+
+      autres.map(x=>'<optgroup label="'+esc(parcLabel(x))+'">'+x.cibles.map(id=>{const t=byId(id);return t?'<option value="'+esc(id)+'">Cible '+esc(t.n)+'</option>':'';}).join('')+'</optgroup>').join('')+
+      '</select><button class="btn small" type="button" data-p="copy">Copier dans ce parcours</button></div>';
   }
   box.innerHTML=h;
 }
@@ -1036,38 +1089,52 @@ $('#parc-body').addEventListener('click',e=>{
   if(a==='go'){select(b.dataset.id,true);return;}
   if(!canEdit()) return;
   if(a==='alti'){computeAlti();return;}
-  if(a==='new'){
-    materialize(parcoursActif());
-    const q={id:'p'+Date.now().toString(36),nom:'Parcours '+(state.parcours.length+1),cibles:[],via:{},alti:{}};
-    state.parcours.push(q); state.parcActif=q.id;
-  }else if(a==='del'){
+  if(a==='addnew'){$('#btn-add').click();return;}
+  if(a==='new'){parcNewOpen=!parcNewOpen;renderParcours();return;}
+  if(a==='trace'){setMode({type:'trace',key:b.dataset.key,pts:[]});return;}
+  if(a==='del'){
     if(!parcDelArmed){parcDelArmed=true;renderParcours();return;}
     parcDelArmed=false;
-    const q=parcoursActif(); state.parcours=state.parcours.filter(x=>x.id!==q.id); state.parcActif=null;
-    toast('Parcours supprimé');
-  }else if(a==='trace'){
-    setMode({type:'trace',key:b.dataset.key,pts:[]}); return;
-  }else{
-    const q=materialize(parcoursActif()), i=+b.dataset.i;
-    if(a==='up'&&i>0) q.cibles.splice(i-1,0,q.cibles.splice(i,1)[0]);
-    else if(a==='down'&&i<q.cibles.length-1) q.cibles.splice(i+1,0,q.cibles.splice(i,1)[0]);
-    else if(a==='rm') q.cibles.splice(i,1);
-    else if(a==='add'){const v=$('#parc-add').value; if(v&&q.cibles.indexOf(v)<0) q.cibles.push(v);}
-    else if(a==='addall') state.targets.filter(t=>q.cibles.indexOf(t.id)<0).sort(natCmp).forEach(t=>q.cibles.push(t.id));
-    else if(a==='straight'){delete q.via[b.dataset.key];delete q.alti[b.dataset.key];}
-    prune(q);
+    const q=parcoursActif(), nom=q.nom;
+    state.targets.filter(t=>t.parc===q.id).forEach(t=>dropLayers(t.id));
+    state.targets=state.targets.filter(t=>t.parc!==q.id);
+    state.parcours=state.parcours.filter(x=>x.id!==q.id);
+    save(); switchParcours(state.parcours[0].id); toast('Parcours « '+nom+' » supprimé');
+    return;
   }
-  save(); renderParcours(); redrawAll(); drawParcours();
+  if(a==='create'){
+    const type=$('#pn-type').value, src=parcoursList().find(x=>x.id===$('#pn-src').value);
+    const q={id:'p'+uid(),nom:$('#pn-nom').value.trim()||PARC_TYPES[type]||'Parcours',type:type,cibles:[],via:{},alti:{}};
+    if(src){
+      const ren={};
+      src.cibles.forEach(id=>{const t=byId(id); if(!t) return; const c=cloneCible(t,q.id); ren[id]=c.id; state.targets.push(c); q.cibles.push(c.id);});
+      ['via','alti'].forEach(k=>Object.keys(src[k]).forEach(key=>{const ab=key.split('>'); if(ren[ab[0]]&&ren[ab[1]]) q[k][ren[ab[0]]+'>'+ren[ab[1]]]=JSON.parse(JSON.stringify(src[k][key]));}));
+    }
+    state.parcours.push(q); save(); switchParcours(q.id);
+    toast('Parcours « '+q.nom+' » créé'+(src?' avec '+q.cibles.length+' cibles copiées':''));
+    return;
+  }
+  const q=parcoursActif(), i=+b.dataset.i;
+  if(a==='up'&&i>0) q.cibles.splice(i-1,0,q.cibles.splice(i,1)[0]);
+  else if(a==='down'&&i<q.cibles.length-1) q.cibles.splice(i+1,0,q.cibles.splice(i,1)[0]);
+  else if(a==='straight'){delete q.via[b.dataset.key];delete q.alti[b.dataset.key];}
+  else if(a==='copy'){
+    const t=byId($('#parc-copy').value); if(!t) return;
+    const c=cloneCible(t,q.id); state.targets.push(c); q.cibles.push(c.id);
+    toast('Cible '+t.n+' copiée depuis « '+nomParcours(t.parc)+' »');
+  }
+  prune(q); save(); renderList(); redrawAll(); drawParcours();
 });
 $('#parc-body').addEventListener('change',e=>{
-  if(e.target.id==='parc-sel'){state.parcActif=e.target.value;parcDelArmed=false;localSave();renderParcours();redrawAll();drawParcours();fitParcours();}
-  else if(e.target.id==='parc-show'){state.parcShow=e.target.checked;localSave();redrawAll();drawParcours();}
+  if(e.target.id==='parc-sel') switchParcours(e.target.value);
+  else if(e.target.id==='parc-show'){state.parcShow=e.target.checked;localSave();drawParcours();}
+  else if(e.target.id==='parc-type'&&canEdit()){parcoursActif().type=e.target.value;save();renderParcours();}
 });
 $('#parc-body').addEventListener('input',e=>{
   if(e.target.id!=='parc-nom'||!canEdit()) return;
-  const q=materialize(parcoursActif()); q.nom=e.target.value.trim()||'Parcours';
-  const o=$('#parc-sel option[value="'+q.id+'"]'); if(o) o.textContent=q.nom;
-  $('#parc-sum').textContent=q.nom+' · '+q.cibles.length+' cibles';
+  const q=parcoursActif(); q.nom=e.target.value.trim()||'Parcours';
+  const o=$('#parc-sel option[value="'+q.id+'"]'); if(o) o.textContent=parcLabel(q);
+  $('#parc-sum').textContent=parcLabel(q)+' · '+q.cibles.length+' cibles';
   saveSoon();
 });
 
@@ -1227,9 +1294,9 @@ $('#detail-slot').addEventListener('input',e=>{
 });
 
 $('#btn-add').addEventListener('click',()=>{
-  const max=state.targets.reduce((m,t)=>Math.max(m,numFirst(t.n)||0),0);
-  const t={id:'t'+Date.now().toString(36),n:String(max+1),buttes:'1',taille:'90',dAct:'',dEnv:'',faire:'',reparer:'',trajLen:'',largeur:'',protection:'',pCoul:'rouge',autres:[],cible:null,pas:null,zCible:null,zPas:null};
-  state.targets.push(t); save(); filter='all';
+  const q=parcoursActif(), max=ciblesActives().reduce((m,t)=>Math.max(m,numFirst(t.n)||0),0);
+  const t={id:'t'+uid(),parc:q.id,n:String(max+1),buttes:'1',taille:'90',dAct:'',dEnv:'',faire:'',reparer:'',trajLen:'',largeur:'',protection:'',pCoul:'rouge',autres:[],cible:null,pas:null,zCible:null,zPas:null};
+  state.targets.push(t); q.cibles.push(t.id); save(); filter='all';
   document.querySelectorAll('#filters [data-f]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.f==='all')));
   select(t.id,false); setMode({type:'cible',id:t.id});
 });
@@ -1260,7 +1327,7 @@ $('#btn-reset').addEventListener('click',e=>{
   const b=e.currentTarget;
   if(!resetArmed){resetArmed=true;b.classList.add('armed');b.textContent='Confirmer : tout effacer';setTimeout(()=>{resetArmed=false;b.classList.remove('armed');b.textContent='Repartir de l\'inventaire';},5000);return;}
   Object.keys(layers).forEach(dropLayers);
-  const v=state.view; state=fresh(); state.view=v; sel=null; save();
+  const v=state.view; state=normalize(fresh()); state.view=v; sel=null; save();
   syncSettings();
   resetArmed=false;b.classList.remove('armed');b.textContent='Repartir de l\'inventaire';
   drawPerim(); renderAll(); toast('Données remises à l\'état de l\'inventaire');
@@ -1278,7 +1345,9 @@ function kc(p){return p[1].toFixed(7)+','+p[0].toFixed(7)+',0';}
 function exportKML(){
   const pm=[];
   if(state.perimetre.length>=3) pm.push('<Placemark><name>Périmètre du terrain</name><styleUrl>#perim</styleUrl><Polygon><outerBoundaryIs><LinearRing><coordinates>'+state.perimetre.concat([state.perimetre[0]]).map(kc).join(' ')+'</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>');
-  state.targets.forEach(t=>{
+  parcoursList().forEach(P=>{
+  pm.push('<Folder><name>'+xml(parcLabel(P))+'</name>');
+  P.cibles.map(byId).filter(Boolean).forEach(t=>{
     const a=analyse(t);
     const desc=xml('Taille '+(t.taille||'?')+' cm, '+(t.buttes||1)+' butte(s). Inventaire '+(t.dAct||'?')+' m, envisagé '+(t.dEnv||'?')+' m'+(a.placed?'. Mesuré '+fmt(a.dist)+' m':'')+'. Protection derrière : '+(PROTECTIONS[t.protection||'']||t.protection)+'. A faire : '+(lines(t.faire).join(' ; ')||'RAS')+'. A réparer : '+(lines(t.reparer).join(' ; ')||'RAS'));
     if(t.cible) pm.push('<Placemark><name>Cible '+xml(t.n)+'</name><description>'+desc+'</description><styleUrl>#cible</styleUrl><Point><coordinates>'+kc(t.cible)+'</coordinates></Point></Placemark>');
@@ -1295,9 +1364,9 @@ function exportKML(){
       if(a.largeur>0) pm.push('<Placemark><name>Ligne de tir '+xml(t.n)+' ('+fmt(a.largeur,1)+' m)</name><styleUrl>#couloir</styleUrl><Polygon><outerBoundaryIs><LinearRing><coordinates>'+a.couloir.concat([a.couloir[0]]).map(kc).join(' ')+'</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>');
     }
   });
-  parcoursList().forEach(q=>{
-    const lignes=[]; for(let i=0;i<q.cibles.length-1;i++){const sg=segPoints(q,i); if(sg) lignes.push('<LineString><tessellate>1</tessellate><coordinates>'+sg.pts.map(kc).join(' ')+'</coordinates></LineString>');}
-    if(lignes.length) pm.push('<Placemark><name>'+xml(q.nom)+' ('+fmtLen(parcoursStats(q).len)+')</name><styleUrl>#parc</styleUrl><MultiGeometry>'+lignes.join('')+'</MultiGeometry></Placemark>');
+  const lignes=[]; for(let i=0;i<P.cibles.length-1;i++){const sg=segPoints(P,i); if(sg) lignes.push('<LineString><tessellate>1</tessellate><coordinates>'+sg.pts.map(kc).join(' ')+'</coordinates></LineString>');}
+  if(lignes.length) pm.push('<Placemark><name>Chemin ('+fmtLen(parcoursStats(P).len)+')</name><styleUrl>#parc</styleUrl><MultiGeometry>'+lignes.join('')+'</MultiGeometry></Placemark>');
+  pm.push('</Folder>');
   });
   const k='<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>Terrain Compagnie d\'Arc de Saint-Vrain</name>'+
     '<Style id="cible"><IconStyle><color>ff00d2ff</color><scale>1.1</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/target.png</href></Icon></IconStyle></Style>'+
@@ -1317,7 +1386,7 @@ function exportGeoJSON(){
   const f=[];
   if(state.perimetre.length>=3) f.push({type:'Feature',properties:{type:'perimetre'},geometry:{type:'Polygon',coordinates:[state.perimetre.concat([state.perimetre[0]]).map(ll2)]}});
   state.targets.forEach(t=>{
-    const a=analyse(t), props={n:t.n,buttes:t.buttes,taille_cm:t.taille,distance_inventaire:t.dAct,distance_envisagee:t.dEnv,a_faire:t.faire,a_reparer:t.reparer,protection:t.protection||''};
+    const a=analyse(t), props={parcours:nomParcours(t.parc),n:t.n,buttes:t.buttes,taille_cm:t.taille,distance_inventaire:t.dAct,distance_envisagee:t.dEnv,a_faire:t.faire,a_reparer:t.reparer,protection:t.protection||''};
     if(t.cible) f.push({type:'Feature',properties:Object.assign({type:'cible',altitude:t.zCible},props),geometry:{type:'Point',coordinates:ll2(t.cible)}});
     if(t.pas) f.push({type:'Feature',properties:{type:'pas_de_tir',n:t.n,couleur:t.pCoul,principal:true,altitude:t.zPas},geometry:{type:'Point',coordinates:ll2(t.pas)}});
     (t.autres||[]).forEach(q=>{if(q.pos) f.push({type:'Feature',properties:{type:'pas_de_tir',n:t.n,couleur:q.c,principal:false},geometry:{type:'Point',coordinates:ll2(q.pos)}});});
@@ -1337,11 +1406,11 @@ function exportGeoJSON(){
 }
 function csvCell(v){v=String(v==null?'':v);return /[",;\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}
 function exportCSV(){
-  const head=CSV_HEAD.concat(['Distance mesurée (m)','Latitude cible','Longitude cible','Latitude pas','Longitude pas','Largeur ligne de tir (m)','Trajectoire derrière cible (m)','Protection derrière cible','Couleur pas de tir','Autres piquets']);
-  const rows=state.targets.map(t=>{
+  const head=CSV_HEAD.concat(['Distance mesurée (m)','Latitude cible','Longitude cible','Latitude pas','Longitude pas','Largeur ligne de tir (m)','Trajectoire derrière cible (m)','Protection derrière cible','Couleur pas de tir','Autres piquets','Parcours']);
+  const rows=parcoursList().flatMap(P=>P.cibles.map(byId).filter(Boolean)).map(t=>{
     const a=analyse(t);
     return [t.n,t.buttes,t.taille,t.dAct,t.dEnv,t.faire,t.reparer,a.placed?a.dist.toFixed(1):'',
-      t.cible?t.cible[0].toFixed(7):'',t.cible?t.cible[1].toFixed(7):'',t.pas?t.pas[0].toFixed(7):'',t.pas?t.pas[1].toFixed(7):'',t.largeur,t.trajLen,PROTECTIONS[t.protection||'']||t.protection,coul(t.pCoul).l,a.autres.map(q=>coul(q.c).l+' '+q.dist.toFixed(1)+' m').join(' / ')].map(csvCell).join(',');
+      t.cible?t.cible[0].toFixed(7):'',t.cible?t.cible[1].toFixed(7):'',t.pas?t.pas[0].toFixed(7):'',t.pas?t.pas[1].toFixed(7):'',t.largeur,t.trajLen,PROTECTIONS[t.protection||'']||t.protection,coul(t.pCoul).l,a.autres.map(q=>coul(q.c).l+' '+q.dist.toFixed(1)+' m').join(' / '),nomParcours(t.parc)].map(csvCell).join(',');
   });
   download('terrain-saint-vrain-'+stamp()+'.csv','text/csv;charset=utf-8','﻿'+[head.map(csvCell).join(',')].concat(rows).join('\r\n'));
 }
@@ -1382,8 +1451,9 @@ function importCSV(text){
   let added=0,updated=0;
   rows.slice(1).forEach(r=>{
     const n=(r[col.n]||'').trim(); if(!n) return;
-    let t=state.targets.find(x=>String(x.n).trim()===n);
-    if(!t){t={id:'t'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),n:n,cible:null,pas:null,zCible:null,zPas:null};FIELDS.forEach(k=>{if(t[k]==null)t[k]='';});state.targets.push(t);added++;}else updated++;
+    const P=parcoursActif();
+    let t=state.targets.find(x=>x.parc===P.id&&String(x.n).trim()===n);
+    if(!t){t={id:'t'+uid(),parc:P.id,n:n,cible:null,pas:null,zCible:null,zPas:null,autres:[]};FIELDS.forEach(k=>{if(t[k]==null)t[k]='';});state.targets.push(t);P.cibles.push(t.id);added++;}else updated++;
     Object.keys(col).forEach(k=>{if(col[k]>=0&&r[col[k]]!=null) t[k]=r[col[k]].trim();});
     const iProt=idx('protection');
     if(iProt>=0&&r[iProt]!=null){
@@ -1394,7 +1464,7 @@ function importCSV(text){
     if(!isNaN(g(iLat))&&!isNaN(g(iLng))) t.cible=[g(iLat),g(iLng)];
     if(!isNaN(g(iPLat))&&!isNaN(g(iPLng))) t.pas=[g(iPLat),g(iPLng)];
   });
-  return 'Tableau importé : '+updated+' cible(s) mises à jour, '+added+' ajoutée(s). Les positions sur la carte sont conservées.';
+  return 'Tableau importé dans « '+parcoursActif().nom+' » : '+updated+' cible(s) mises à jour, '+added+' ajoutée(s). Les positions sur la carte sont conservées.';
 }
 $('#file').addEventListener('change',async e=>{
   const file=e.target.files[0]; e.target.value=''; if(!file) return;
@@ -1451,6 +1521,7 @@ function fromRow(o){
   t.pas=(pl!=null&&pg!=null)?[pl,pg]:null;
   t.zCible=numOrNull(o.zCible); t.zPas=numOrNull(o.zPas);
   t.pCoul=coulKey(o.pCoul);
+  t.parc=String(o.parcId==null?'':o.parcId);
   t.autres=[];
   try{(JSON.parse(o.autres||'[]')||[]).forEach(q=>{const la=numOrNull(q.lat),lo=numOrNull(q.lng); if(la!=null&&lo!=null&&t.autres.length<MAX_AUTRES) t.autres.push({c:coulKey(q.c),pos:[la,lo]});});}catch(e){}
   return t;
@@ -1462,7 +1533,7 @@ function toRow(t){
     dist:a.placed?Math.round(a.dist*10)/10:'',
     cLat:t.cible?c(t.cible[0]):'',cLng:t.cible?c(t.cible[1]):'',pLat:t.pas?c(t.pas[0]):'',pLng:t.pas?c(t.pas[1]):'',
     zCible:t.zCible==null?'':t.zCible,zPas:t.zPas==null?'':t.zPas,
-    pCoul:coul(t.pCoul).l,
+    pCoul:coul(t.pCoul).l,parcId:t.parc,
     autres:(t.autres||[]).filter(q=>q.pos).length?JSON.stringify(t.autres.filter(q=>q.pos).map(q=>({c:q.c,lat:c(q.pos[0]),lng:c(q.pos[1])}))):'',
     dPiquets:a.placed?[coul(t.pCoul).l+' '+fmt(a.dist)+' m'].concat(a.autres.map(q=>coul(q.c).l+' '+fmt(q.dist)+' m')).join(' / '):''};
 }
@@ -1502,7 +1573,9 @@ async function flush(){
   try{
     for(const k of Object.keys(pending)){
       const op=pending[k];
-      const r=await api(Object.assign({},op,{code:acces.code,par:acces.nom||''}));
+      const env=Object.assign({},op,{code:acces.code,par:acces.nom||''});
+      if(op.action==='cible') env.cible=Object.assign({},op.cible,{parc:nomParcours(op.cible.parcId)});
+      const r=await api(env);
       if(!r.ok){handleErr(r);break;}
       if(pending[k]===op) delete pending[k];
       lastVersion=r.version; storePending();
@@ -1532,9 +1605,13 @@ function applyServer(r){
     else if(op.action==='config'){state.perimetre=op.perimetre||[]; state.settings=Object.assign({},DEFAULT_SETTINGS,op.reglages||{}); state.parcours=op.parcours||[];}
   });
   normalize(state);
-  synced=snap();
+  /* Reference = le Sheet tel qu'il est. Ce que l'appli a complete ou converti (parcours des cibles, ancienne version)
+     apparait donc comme une modification et lui est renvoye par un appareil en edition. */
+  const ref={}; (r.cibles||[]).forEach(o=>{ref[String(o.id)]=JSON.stringify(toRow(fromRow(o)));});
+  synced={t:ref,c:JSON.stringify({perimetre:Array.isArray(r.perimetre)?r.perimetre:[],reglages:r.reglages?Object.assign({},DEFAULT_SETTINGS,r.reglages):null,parcours:Array.isArray(r.parcours)?r.parcours:[]})};
   sel=byId(keepSel)?keepSel:null;
   localSave(); syncSettings(); drawPerim(); renderAll(); updateRestore(); setStatus();
+  diffQueue();
 }
 
 async function refresh(){
@@ -1609,7 +1686,7 @@ $('#btn-restore').addEventListener('click',()=>{
       n++;
     });
     if(Array.isArray(s.perimetre)&&s.perimetre.length>=3&&state.perimetre.length<3) state.perimetre=s.perimetre;
-    sel=null; save(); drawPerim(); renderAll();
+    normalize(state); sel=null; save(); drawPerim(); renderAll();
     setLS(K_AVANT,null); updateRestore();
     toast(n+' cible'+(n>1?'s':'')+' placée'+(n>1?'s':'')+' ajoutée'+(n>1?'s':'')+' au Sheet');
   }catch(e){toast('Sauvegarde illisible : rien n\'a été envoyé.');}
@@ -1633,7 +1710,7 @@ function showPublie(){
     (state.targets.some(t=>t.cible)?'Enregistré sur cet appareil':'Inventaire du 08/11 chargé');
 }
 function fitPlaced(){
-  const pts=state.targets.flatMap(t=>[t.cible,t.pas].concat((t.autres||[]).map(q=>q.pos)).filter(Boolean));
+  const pa=parcoursActif().id, pts=state.targets.filter(t=>t.parc===pa).flatMap(t=>[t.cible,t.pas].concat((t.autres||[]).map(q=>q.pos)).filter(Boolean));
   if(pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.2));
 }
 /* Donnees de reference publiees a cote de la page (terrain.json dans le depot GitHub).
