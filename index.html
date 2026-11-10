@@ -205,6 +205,57 @@ button{cursor:pointer}
   input,textarea,select{font-size:16px!important}
   .item{padding-block:11px}
 }
+/* Vue Plan : une feuille A4 paysage, en couleurs papier quel que soit le theme */
+#pres{position:fixed;inset:0;z-index:3000;display:flex;flex-direction:column;background:#dfe3dc;color:#17221b}
+.pres-bar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 14px;background:var(--panel);color:var(--ink);border-bottom:1px solid var(--line);
+  padding-block:10px;padding-top:max(10px,env(safe-area-inset-top,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.pres-t{font:700 20px/1.1 var(--f-num);align-self:center}
+.pres-f{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
+.pres-f.grow{flex:1 1 260px}
+.pres-f input,.pres-f select{height:34px;border:1px solid var(--line);border-radius:6px;background:var(--soft);color:var(--ink);padding:0 8px;min-width:0}
+.pres-opts{display:flex;flex-wrap:wrap;gap:4px 14px;border:0;margin:0;padding:0;flex-basis:100%}
+.pres-opts legend{font-size:12px;color:var(--muted);padding:0;margin-bottom:4px}
+.pres-help{flex:1 1 320px}
+.pres-btns{display:flex;flex-wrap:wrap;gap:8px}
+.pres-scroll{flex:1;overflow:auto;padding:20px}
+.page{box-sizing:border-box;width:297mm;margin:0 auto 20px;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.22);padding:10mm;display:flex;flex-direction:column;font-family:var(--f-body);color:#17221b}
+.page1{height:210mm}
+.page2{min-height:210mm}
+.pg-head{display:flex;justify-content:space-between;align-items:flex-end;gap:8mm;padding-bottom:2.5mm;border-bottom:.6mm solid #1f4d36}
+.pg-head h1{margin:0;font:700 22pt/1.05 var(--f-num);text-wrap:balance}
+.pg-head p{margin:1.5mm 0 0;font-size:9.5pt;color:#4d5a51}
+.pg-club{text-align:right;font:600 10pt/1.2 var(--f-num);letter-spacing:.04em;text-transform:uppercase;color:#1f4d36}
+.pg-map{position:relative;flex:1;margin:3mm 0;border:.3mm solid #9aa59c;overflow:hidden}
+#pg-map-slot{position:absolute;inset:0}
+.pg-nord{position:absolute;top:3mm;right:3mm;width:11mm;z-index:1000;background:rgba(255,255,255,.88);border-radius:1.5mm;padding:1mm}
+.pg-foot{display:flex;gap:6mm;align-items:flex-start;min-height:22mm}
+.pg-legende{flex:1;display:flex;flex-wrap:wrap;gap:1.5mm 6mm;font-size:8.5pt;align-content:flex-start}
+.pg-legende span{display:inline-flex;align-items:center;gap:2mm}
+.pg-legende svg{width:9mm;height:4.5mm;flex:none}
+.pg-stats{display:grid;grid-template-columns:repeat(3,auto);gap:1mm 6mm;margin:0;font-size:8.5pt}
+.pg-stats dt{color:#5d6a61;text-transform:uppercase;letter-spacing:.05em;font-size:7pt}
+.pg-stats dd{margin:0;font:700 12pt/1.1 var(--f-num);font-variant-numeric:tabular-nums}
+.page2 h2{margin:0 0 4mm;font:700 16pt/1.1 var(--f-num)}
+.pg-table{width:100%;border-collapse:collapse;font-size:9pt}
+.pg-table th{text-align:left;font-size:7.5pt;text-transform:uppercase;letter-spacing:.05em;color:#5d6a61;border-bottom:.4mm solid #1f4d36;padding:1.5mm 2mm}
+.pg-table td{border-bottom:.2mm solid #d6ddd5;padding:1.6mm 2mm;vertical-align:top;font-variant-numeric:tabular-nums}
+.pg-table td.n{font:700 11pt/1 var(--f-num)}
+.pg-table tr{break-inside:avoid}
+.pg-note{margin:4mm 0 0;font-size:7.5pt;color:#5d6a61}
+.pg-dot{display:inline-block;width:2.6mm;height:2.6mm;transform:rotate(45deg);border:.3mm solid #17221b;margin-right:1.2mm;vertical-align:.1mm}
+#pres .leaflet-control-zoom,#pres .leaflet-control-layers{display:none}
+@media print{
+  @page{size:A4 landscape;margin:10mm}
+  :root{padding:0!important}
+  html,body{background:#fff!important;height:auto!important}
+  body *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .app,.toast,.pres-bar{display:none!important}
+  #pres{position:static;display:block;background:#fff}
+  .pres-scroll{padding:0;overflow:visible}
+  .page{width:277mm;padding:0;margin:0;box-shadow:none;break-after:page}
+  .page1{height:190mm}
+  .page2{min-height:0;break-after:auto}
+}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -221,6 +272,8 @@ button{cursor:pointer}
     <details class="menu" id="menu">
       <summary class="btn">Données</summary>
       <div class="menu-pop">
+        <button type="button" id="btn-plan">Plan à présenter (impression ou PDF)</button>
+        <hr>
         <button type="button" data-exp="kml">Exporter pour Google Earth (.kml)</button>
         <button type="button" data-exp="geojson">Exporter en GeoJSON</button>
         <button type="button" data-exp="csv">Exporter le tableau (.csv)</button>
@@ -289,6 +342,40 @@ button{cursor:pointer}
   <div class="mapwrap">
     <div id="map"></div>
     <div class="banner" id="banner" hidden></div>
+  </div>
+</div>
+<div id="pres" hidden>
+  <div class="pres-bar">
+    <strong class="pres-t">Plan à présenter</strong>
+    <label class="pres-f grow">Titre<input id="pr-titre" maxlength="90"></label>
+    <label class="pres-f">Fond<select id="pr-fond"><option value="photo">Photo aérienne</option><option value="plan">Plan IGN</option></select></label>
+    <fieldset class="pres-opts"><legend>Afficher</legend>
+      <label class="chk"><input type="checkbox" data-o="chemin" checked> Chemin</label>
+      <label class="chk"><input type="checkbox" data-o="couloirs" checked> Lignes de tir et trajectoires</label>
+      <label class="chk"><input type="checkbox" data-o="protections" checked> Protections</label>
+      <label class="chk"><input type="checkbox" data-o="etiquettes" checked> Distances sur la carte</label>
+      <label class="chk"><input type="checkbox" data-o="perimetre" checked> Périmètre</label>
+      <label class="chk"><input type="checkbox" data-o="notes"> Notes internes (à faire, à réparer, distances envisagées)</label>
+    </fieldset>
+    <p class="hint pres-help">Déplacez et zoomez la carte pour cadrer, attendez que la photo soit chargée, puis imprimez. Pour un PDF, choisissez « Enregistrer au format PDF » comme imprimante, en paysage.</p>
+    <div class="pres-btns"><button class="btn primary" type="button" id="pr-print">Imprimer ou enregistrer en PDF</button><button class="btn" type="button" id="pr-close">Fermer</button></div>
+  </div>
+  <div class="pres-scroll">
+    <section class="page page1">
+      <header class="pg-head">
+        <div class="pg-tt"><h1 id="pg-titre"></h1><p id="pg-sous"></p></div>
+        <div class="pg-club">Compagnie d'Arc<br>de Saint-Vrain</div>
+      </header>
+      <div class="pg-map"><div id="pg-map-slot"></div>
+        <svg class="pg-nord" viewBox="0 0 40 52" aria-label="Nord"><path d="M20 4 L31 34 L20 27 L9 34 Z" fill="#17221b"/><path d="M20 4 L20 27 L9 34 Z" fill="#ffffff" stroke="#17221b" stroke-width="1.5" stroke-linejoin="round"/><text x="20" y="49" text-anchor="middle" font-size="12" font-weight="700" fill="#17221b" font-family="Arial, sans-serif">N</text></svg>
+      </div>
+      <footer class="pg-foot"><div class="pg-legende" id="pg-legende"></div><dl class="pg-stats" id="pg-stats"></dl></footer>
+    </section>
+    <section class="page page2">
+      <h2 id="pg-t2"></h2>
+      <table class="pg-table" id="pg-table"></table>
+      <p class="pg-note">Positions relevées sur photo aérienne IGN ou au GPS, à quelques mètres près. Distances mesurées en ligne droite du piquet à la cible. Document indicatif : il ne remplace pas un relevé de géomètre.</p>
+    </section>
   </div>
 </div>
 <div class="toast" id="toast" hidden></div>
@@ -558,7 +645,12 @@ function icPas(t,c){
   const k=coul(c||t.pCoul);
   return L.divIcon({className:'',html:'<div class="mk-pas'+(sel===t.id?' is-sel':'')+'"><b style="background:'+k.hex+'"><span style="color:'+k.txt+'">'+esc(shortN(t.n))+'</span></b></div>',iconSize:[22,22],iconAnchor:[11,11]});
 }
-function label(pos,html,z){return L.marker(pos,{icon:L.divIcon({className:'',html:html,iconSize:null}),interactive:false,keyboard:false,zIndexOffset:z||0});}
+let presOn=false;
+const presOpts={chemin:true,couloirs:true,protections:true,etiquettes:true,perimetre:true,notes:false};
+/* Hors vue Plan tout est affiche ; dans la vue Plan, selon les cases cochees */
+function P(k){return !presOn||presOpts[k]!==false;}
+const NO_LABEL={addTo(){return this;}};
+function label(pos,html,z){if(!P('etiquettes')) return NO_LABEL; return L.marker(pos,{icon:L.divIcon({className:'',html:html,iconSize:null}),interactive:false,keyboard:false,zIndexOffset:z||0});}
 
 /* Seules les cibles du parcours choisi sont dessinees */
 function visibleOnMap(t){return t.parc===parcoursActif().id;}
@@ -613,20 +705,20 @@ function drawGeo(t){
   if(state.settings.zoneSecu)
     L.polygon(a.zone,{color:MAPC.zone,weight:1.5,opacity:.8,fillColor:MAPC.zone,fillOpacity:isSel?.22:.1,dashArray:'5 5',interactive:false}).addTo(g);
   const tcol=a.trajHors?MAPC.bad:MAPC.axis;
-  if(a.largeur>0){
+  if(P('couloirs')&&a.largeur>0){
     L.polygon(a.couloirAxe,{color:col,weight:1,opacity:.75,fillColor:col,fillOpacity:isSel?.2:.09,interactive:false}).addTo(g);
     if(a.trajLen>0) L.polygon(a.couloirTraj,{color:tcol,weight:1,opacity:.75,fillColor:tcol,fillOpacity:isSel?.2:.09,interactive:false}).addTo(g);
   }
-  if(a.trajLen>0){
+  if(P('couloirs')&&a.trajLen>0){
     L.polyline([t.cible,a.trajEnd],{color:'#000',weight:isSel?6:4,opacity:.3,dashArray:'10 6',interactive:false}).addTo(g);
     L.polyline([t.cible,a.trajEnd],{color:tcol,weight:isSel?3:2,opacity:1,dashArray:'10 6',interactive:false}).addTo(g);
     label(a.trajEnd,'<div class="mk-dist s-'+(a.trajHors?'bad':'ok')+'">+'+fmt(a.trajLen,0)+' m</div>',250).addTo(g);
   }
-  if(a.protLine){
+  if(P('protections')&&a.protLine){
     L.polyline(a.protLine,{pane:'prot',renderer:protRenderer,color:'#000',weight:isSel?11:9,opacity:.7,lineCap:'butt',interactive:false}).addTo(g);
     L.polyline(a.protLine,{pane:'prot',renderer:protRenderer,color:MAPC.prot,weight:isSel?7:5,opacity:1,lineCap:'butt',interactive:false}).addTo(g);
   }
-  if(a.ghost){
+  if(a.ghost&&P('notes')){
     L.polyline([t.pas,a.ghost],{color:a.envPossible===false?MAPC.bad:col,weight:2,dashArray:'2 7',opacity:.95,interactive:false}).addTo(g);
     label(a.ghost,'<div class="mk-ghost">'+fmt(a.dEnv,0)+' m envisagé</div>',200).addTo(g);
   }
@@ -637,11 +729,11 @@ function drawGeo(t){
   /* Piquets supplementaires : meme representation, la couleur du piquet sur l'etiquette de distance */
   a.autres.forEach(q=>{
     const qc=q.trajHors?MAPC.bad:MAPC.axis;
-    if(a.largeur>0){
+    if(P('couloirs')&&a.largeur>0){
       L.polygon(q.couloirAxe,{color:MAPC.axis,weight:1,opacity:.6,fillColor:MAPC.axis,fillOpacity:isSel?.16:.07,interactive:false}).addTo(g);
       if(a.trajLen>0) L.polygon(q.couloirTraj,{color:qc,weight:1,opacity:.6,fillColor:qc,fillOpacity:isSel?.16:.07,interactive:false}).addTo(g);
     }
-    if(a.trajLen>0) L.polyline([t.cible,q.trajEnd],{color:qc,weight:isSel?3:2,opacity:.9,dashArray:'10 6',interactive:false}).addTo(g);
+    if(P('couloirs')&&a.trajLen>0) L.polyline([t.cible,q.trajEnd],{color:qc,weight:isSel?3:2,opacity:.9,dashArray:'10 6',interactive:false}).addTo(g);
     L.polyline([q.pos,t.cible],{color:'#000',weight:isSel?6:4,opacity:.3,interactive:false}).addTo(g);
     L.polyline([q.pos,t.cible],{color:MAPC.axis,weight:isSel?3:2,opacity:1,interactive:false}).addTo(g);
     label([(q.pos[0]+t.cible[0])/2,(q.pos[1]+t.cible[1])/2],'<div class="mk-dist" style="border-left-color:'+coul(q.c).hex+'">'+fmt(q.dist)+' m</div>',290).addTo(g);
@@ -655,7 +747,7 @@ function drawPerim(){
   if(mode&&mode.type==='perim'){
     if(p.length>1) L.polyline(p.concat(p.length>2?[p[0]]:[]),{color:MAPC.perim,weight:2,dashArray:'6 4',interactive:false}).addTo(perimLayer);
     p.forEach(pt=>L.marker(pt,{icon:L.divIcon({className:'',html:'<div class="mk-perim"></div>',iconSize:[10,10],iconAnchor:[5,5]}),interactive:false}).addTo(perimLayer));
-  }else if(p.length>=3){
+  }else if(p.length>=3&&P('perimetre')){
     L.polygon(p,{color:MAPC.perim,weight:2.5,opacity:.95,fill:false,dashArray:'8 5',interactive:false}).addTo(perimLayer);
   }
 }
@@ -715,7 +807,7 @@ function fmtMin(min){if(!min) return '—'; const h=Math.floor(min/60),m=Math.ro
 function drawParcours(){
   parcLayer.clearLayers();
   const traceMode=!!(mode&&mode.type==='trace');
-  if(state.parcShow===false&&!traceMode) return;
+  if((presOn?!presOpts.chemin:state.parcShow===false)&&!traceMode) return;
   const q=parcoursActif(), z=map.getZoom();
   for(let i=0;i<q.cibles.length-1;i++){
     const sg=segPoints(q,i); if(!sg) continue;
@@ -1057,7 +1149,8 @@ function renderParcours(){
   if(st.manquants) notes.push(st.manquants+' tronçon'+(st.manquants>1?'s':'')+' sans mesure : cible ou pas de tir pas encore placé.');
   notes.push('Marche estimée à 4 km/h'+(st.altiOk?', montée comprise':'')+', hors temps de tir. Tirets : ligne droite théorique. Trait plein : chemin réel, dessiné à la main ou enregistré en marchant avec « Dessiner le chemin » puis « Suivre ma position ».');
   h+='<p class="hint">'+notes.join(' ')+'</p>';
-  if(ed&&st.segs.some(Boolean)) h+='<div class="parc-tools"><button class="btn small" type="button" data-p="alti" id="parc-alti">'+(st.altiOk?'Recalculer le dénivelé':'Calculer le dénivelé')+'</button></div>';
+  h+='<div class="parc-tools">'+(ed&&st.segs.some(Boolean)?'<button class="btn small" type="button" data-p="alti" id="parc-alti">'+(st.altiOk?'Recalculer le dénivelé':'Calculer le dénivelé')+'</button>':'')+
+    '<button class="btn small" type="button" data-p="plan">Plan à présenter</button></div>';
   h+='<ol class="parc-list">'+q.cibles.map((id,i)=>{
     const t=byId(id); if(!t) return '';
     const sg=st.segs[i];
@@ -1087,6 +1180,7 @@ $('#parc-body').addEventListener('click',e=>{
   const a=b.dataset.p;
   if(a!=='del') parcDelArmed=false;
   if(a==='go'){select(b.dataset.id,true);return;}
+  if(a==='plan'){openPres();return;}
   if(!canEdit()) return;
   if(a==='alti'){computeAlti();return;}
   if(a==='addnew'){$('#btn-add').click();return;}
@@ -1137,6 +1231,73 @@ $('#parc-body').addEventListener('input',e=>{
   $('#parc-sum').textContent=parcLabel(q)+' · '+q.cibles.length+' cibles';
   saveSoon();
 });
+
+/* ---------- Vue Plan (impression / PDF) ---------- */
+function swatch(inner){return '<svg viewBox="0 0 36 18" aria-hidden="true">'+inner+'</svg>';}
+function titreDefaut(q){return /^parcours\b/i.test(q.nom)?q.nom:'Parcours « '+q.nom+' »';}
+function renderPres(){
+  const q=parcoursActif(), st=parcoursStats(q), cs=ciblesActives(), o=presOpts;
+  const date=new Date().toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
+  $('#pg-titre').textContent=$('#pr-titre').value.trim()||titreDefaut(q);
+  $('#pg-sous').textContent=[q.type?PARC_TYPES[q.type]:'',cs.length+' cible'+(cs.length>1?'s':''),'plan établi le '+date].filter(Boolean).join(' · ');
+  $('#pg-t2').textContent='Cibles · '+parcLabel(q);
+  /* Legende : seulement ce qui est affiche */
+  const coulsUsed=[]; cs.forEach(t=>{if(t.pas&&coulsUsed.indexOf(t.pCoul)<0) coulsUsed.push(t.pCoul); (t.autres||[]).forEach(x=>{if(x.pos&&coulsUsed.indexOf(x.c)<0) coulsUsed.push(x.c);});});
+  const L_=[];
+  L_.push('<span>'+swatch('<circle cx="18" cy="9" r="7.5" fill="#fff" stroke="#111" stroke-width="1"/><circle cx="18" cy="9" r="5.5" fill="#1e88e5"/><circle cx="18" cy="9" r="3.6" fill="#e2231a"/><circle cx="18" cy="9" r="1.8" fill="#f6c90e"/>')+'Cible et son numéro</span>');
+  if(coulsUsed.length) L_.push('<span>'+coulsUsed.map(c=>'<i class="pg-dot" style="background:'+coul(c).hex+'"></i>').join('')+'Piquets ('+coulsUsed.map(c=>coul(c).l.toLowerCase()).join(', ')+')</span>');
+  if(o.couloirs){
+    L_.push('<span>'+swatch('<rect x="1" y="5" width="34" height="8" fill="#3ddc84" fill-opacity=".25" stroke="#3ddc84" stroke-width=".8"/><line x1="1" y1="9" x2="35" y2="9" stroke="#3ddc84" stroke-width="2.5"/>')+'Ligne de tir (piquet vers cible)</span>');
+    L_.push('<span>'+swatch('<line x1="1" y1="9" x2="35" y2="9" stroke="#3ddc84" stroke-width="2" stroke-dasharray="6 4"/>')+'Trajectoire derrière la cible</span>');
+    if(cs.some(t=>analyse(t).trajHors)) L_.push('<span>'+swatch('<line x1="1" y1="9" x2="35" y2="9" stroke="#ff4d3d" stroke-width="2" stroke-dasharray="6 4"/>')+'Trajectoire qui sort du terrain</span>');
+  }
+  if(o.protections&&cs.some(t=>t.protection&&t.protection!=='aucune')) L_.push('<span>'+swatch('<line x1="4" y1="9" x2="32" y2="9" stroke="#000" stroke-width="6"/><line x1="4" y1="9" x2="32" y2="9" stroke="#29b6f6" stroke-width="3.5"/>')+'Protection derrière la cible</span>');
+  if(o.chemin&&cs.length>1) L_.push('<span>'+swatch('<line x1="1" y1="9" x2="35" y2="9" stroke="#c77dff" stroke-width="2.5"/>')+'Chemin du parcours'+(st.segs.some(x=>x&&!x.dessine)?' (tirets : ligne droite)':'')+'</span>');
+  if(o.perimetre&&state.perimetre.length>=3) L_.push('<span>'+swatch('<rect x="0" y="0" width="36" height="18" fill="#5d6a61"/><line x1="2" y1="9" x2="34" y2="9" stroke="#fff" stroke-width="2" stroke-dasharray="5 3"/>')+'Limite du terrain</span>');
+  $('#pg-legende').innerHTML=L_.join('');
+  /* Chiffres cles */
+  const ds=cs.map(t=>analyse(t)).filter(a=>a.placed).flatMap(a=>[a.dist].concat(a.autres.map(x=>x.dist)));
+  const stat=(k,v)=>'<div><dt>'+k+'</dt><dd>'+v+'</dd></div>';
+  $('#pg-stats').innerHTML=stat('Cibles',cs.length)+stat('Distances',ds.length?fmt(Math.min.apply(null,ds),0)+' à '+fmt(Math.max.apply(null,ds),0)+' m':'—')+
+    stat('Longueur',cs.length>1?fmtLen(st.len):'—')+stat('Dénivelé',st.altiOk?'+'+fmt(st.dp,0)+' / −'+fmt(st.dm,0)+' m':'—')+stat('Marche',cs.length>1?fmtMin(st.temps):'—');
+  /* Tableau des cibles, dans l'ordre de passage */
+  const notes=o.notes;
+  let h='<thead><tr><th>Ordre</th><th>Cible</th><th>Taille</th><th>Buttes</th><th>Distances mesurées</th><th>Protection</th>'+(notes?'<th>Distance envisagée</th><th>À faire</th><th>À réparer</th>':'')+'</tr></thead><tbody>';
+  cs.forEach((t,i)=>{
+    const a=analyse(t);
+    const dist=a.placed?['<i class="pg-dot" style="background:'+coul(t.pCoul).hex+'"></i>'+fmt(a.dist)+' m'].concat(a.autres.map(x=>'<i class="pg-dot" style="background:'+coul(x.c).hex+'"></i>'+fmt(x.dist)+' m')).join('<br>'):
+      (t.dAct&&t.dAct!=='?'?esc(t.dAct)+' m (inventaire, non placée)':'non placée');
+    const prot=t.protection?esc(PROTECTIONS[t.protection]||t.protection):'—';
+    h+='<tr><td>'+(i+1)+'</td><td class="n">'+esc(t.n)+'</td><td>'+esc(t.taille||'—')+(numFirst(t.taille)!=null&&/^\s*\d/.test(t.taille)?' cm':'')+'</td><td>'+esc(t.buttes||'1')+'</td><td>'+dist+'</td><td>'+prot+'</td>'+
+      (notes?'<td>'+(t.dEnv&&t.dEnv!=='?'?esc(t.dEnv)+' m':'—')+'</td><td>'+(lines(t.faire).map(esc).join('<br>')||'—')+'</td><td>'+(lines(t.reparer).map(esc).join('<br>')||'—')+'</td>':'')+'</tr>';
+  });
+  $('#pg-table').innerHTML=h+'</tbody>';
+  redrawAll(); drawParcours(); drawPerim();
+}
+function openPres(){
+  if(mode) setMode(null);
+  $('#menu').open=false;
+  presOn=true; $('#pres').hidden=false;
+  $('#pr-titre').value=titreDefaut(parcoursActif());
+  $('#pr-fond').value=map.hasLayer(plan)?'plan':'photo';
+  $('#pg-map-slot').appendChild($('#map'));
+  renderPres(); map.invalidateSize(); fitParcours();
+}
+function closePres(){
+  presOn=false; $('#pres').hidden=true;
+  $('.mapwrap').insertBefore($('#map'),$('.mapwrap').firstChild);
+  map.invalidateSize(); redrawAll(); drawParcours(); drawPerim();
+}
+$('#btn-plan').addEventListener('click',openPres);
+$('#pr-close').addEventListener('click',closePres);
+$('#pr-print').addEventListener('click',()=>{try{window.print();}catch(e){toast('Impression impossible depuis ce navigateur.');}});
+$('#pr-titre').addEventListener('input',()=>{$('#pg-titre').textContent=$('#pr-titre').value.trim()||titreDefaut(parcoursActif());});
+$('#pr-fond').addEventListener('change',e=>{
+  const photo=e.target.value==='photo';
+  if(photo){map.removeLayer(plan);ortho.addTo(map);}else{map.removeLayer(ortho);plan.addTo(map);}
+});
+document.querySelectorAll('#pres [data-o]').forEach(c=>c.addEventListener('change',()=>{presOpts[c.dataset.o]=c.checked;renderPres();}));
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&presOn) closePres();});
 
 /* ---------- Fiche cible ---------- */
 function select(id,fly){
