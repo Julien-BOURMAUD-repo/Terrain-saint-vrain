@@ -62,6 +62,10 @@ button{cursor:pointer}
 .menu-pop hr{border:0;border-top:1px solid var(--line);margin:4px 0}
 .saved{font-size:12px;color:var(--muted)}
 .saved.attente{color:var(--warn);font-weight:600}
+.lock{display:flex;flex-direction:column;gap:8px;padding-block:14px;border-bottom:1px solid var(--line);background:var(--soft)}
+.lock-t{margin:0;font-weight:600}
+.lock-f{display:flex;gap:8px}
+.lock-f input{flex:1;min-width:0;height:36px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);padding:0 10px}
 .lecture .edit-only,.sync .nosync{display:none!important}
 .acces-pop{min-width:270px}
 .acces-pop form,#acces-on{display:flex;flex-direction:column;gap:10px;padding:6px}
@@ -321,6 +325,15 @@ button{cursor:pointer}
 
   <aside class="side">
     <div class="summary" id="summary"></div>
+    <div class="lock pad" id="lock" hidden>
+      <p class="lock-t">Plan réservé aux membres du club</p>
+      <p class="hint">Entrez le code de consultation donné par le bureau.</p>
+      <form id="lock-form" class="lock-f">
+        <input id="lock-code" type="password" autocomplete="current-password" aria-label="Code de consultation" required>
+        <button class="btn primary" type="submit">Consulter</button>
+      </form>
+      <p class="hint" id="lock-msg" aria-live="polite"></p>
+    </div>
     <div id="detail-slot"></div>
     <details class="parc" id="parc-box">
       <summary><span class="parc-t">Parcours</span><span class="parc-sum" id="parc-sum"></span></summary>
@@ -518,7 +531,9 @@ function attribuerCibles(s){
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
 function cloneCible(t,parcId){const c=JSON.parse(JSON.stringify(t)); c.id='t'+uid(); c.parc=parcId; return c;}
 function nomParcours(id){const q=state.parcours.find(x=>x.id===id); return q?q.nom:'';}
-let state=load()||normalize(fresh());
+const avaitCache=(()=>{try{return !!localStorage.getItem(KEY);}catch(e){return false;}})();
+/* Avec la synchronisation, un appareil sans donnees attend le Sheet au lieu d'afficher l'inventaire integre */
+let state=load()||normalize(SYNC_URL?{targets:[],perimetre:[],settings:{},parcours:[]}:fresh());
 let sel=null, mode=null, filter='all', perimBackup=null, parcDelArmed=false, altiRunning=false;
 let photos=[], phDraft=null, phBusy=false, phOpen=null, phDelArmed=false, thumbsLoading=false;
 const thumbCache={}, fullCache={};
@@ -649,6 +664,7 @@ function wmts(layer,format,style){
          '&TILEMATRIXSET=PM&FORMAT='+format+'&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}';
 }
 const ATTR='&copy; <a href="https://www.ign.fr/" target="_blank" rel="noopener">IGN</a> - Géoplateforme';
+const vueSauvee=!!state.view;
 const map=L.map('map',{maxZoom:21,zoomSnap:0.5}).setView(state.view?state.view.c:CENTER,state.view?state.view.z:16);
 const ortho=L.tileLayer(wmts('ORTHOIMAGERY.ORTHOPHOTOS','image/jpeg'),{maxNativeZoom:19,maxZoom:21,attribution:ATTR}).addTo(map);
 const plan=L.tileLayer(wmts('GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2','image/png'),{maxNativeZoom:19,maxZoom:21,attribution:ATTR});
@@ -1128,8 +1144,12 @@ function renderList(){
       '<span class="it-main"><span class="it-title">Cible '+esc(t.n)+'</span><span class="it-meta">'+meta+'</span></span>'+
       chipFor(a)+'</button></li>';
   }).join('');
-  $('#list').innerHTML=rows||'<li class="pad hint" style="padding-block:14px">'+(actives.length?'Aucune cible dans ce filtre.':
-    'Aucune cible dans ce parcours. Ajoutez-en une, ou copiez celles d\'un autre parcours depuis le panneau Parcours.')+'</li>';
+  const vide=actives.length?'Aucune cible dans ce filtre.':
+    (SYNC_URL&&etat==='locked')?'Entrez le code de consultation ci-dessus pour voir les cibles du club.':
+    (SYNC_URL&&etat==='loading')?'Chargement des données du club...':
+    (SYNC_URL&&etat==='offline'&&!lastVersion)?'Impossible de joindre le Sheet du club : vérifiez la connexion, puis rechargez la page.':
+    'Aucune cible dans ce parcours. Ajoutez-en une, ou copiez celles d\'un autre parcours depuis le panneau Parcours.';
+  $('#list').innerHTML=rows||'<li class="pad hint" style="padding-block:14px">'+vide+'</li>';
   drawParcours(); if(!document.activeElement||document.activeElement.id!=='parc-nom') renderParcours();
 }
 $('#list').addEventListener('click',e=>{const b=e.target.closest('[data-id]');if(b) select(b.dataset.id,true);});
@@ -1392,7 +1412,7 @@ async function loadThumbs(){
   const ids=photosDe(t.id).map(x=>x.id).filter(id=>!(id in thumbCache)); if(!ids.length) return;
   thumbsLoading=true;
   try{
-    const r=await api({action:'vignettes',ids:ids,code:acces.code||''});
+    const r=await api({action:'vignettes',ids:ids,code:codeLecture()});
     if(r.ok){
       ids.forEach(id=>{const v=(r.vignettes&&r.vignettes[id])||''; thumbCache[id]=/^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(v)?v:'';});
       document.querySelectorAll('[data-ph]').forEach(b=>{const v=thumbCache[b.dataset.ph], sp=b.querySelector('span'); if(v&&sp){const im=new Image(); im.src=v; im.alt=''; sp.replaceWith(im);}});
@@ -1410,7 +1430,7 @@ async function ouvrirPhoto(id){
   $('#phv-cap').textContent=[x.legende,x.date,x.par?'par '+x.par:''].filter(Boolean).join(' · ');
   const img=$('#phv-img'); img.src=fullCache[id]||thumbCache[id]||''; $('#ph-view').hidden=false; $('#phv-close').focus();
   if(!fullCache[id]){
-    try{const r=await api({action:'photoData',id:id,code:acces.code||''}); if(r.ok) garderPhoto(id,r.data); else toast('Photo introuvable : elle a peut-être été supprimée.');}
+    try{const r=await api({action:'photoData',id:id,code:codeLecture()}); if(r.ok) garderPhoto(id,r.data); else toast('Photo introuvable : elle a peut-être été supprimée.');}
     catch(e){toast('Pas de réseau : photo affichée en petite taille.');}
     if(phOpen===id&&fullCache[id]) img.src=fullCache[id];
   }
@@ -1791,18 +1811,24 @@ function setLS(k,v){try{if(v==null) localStorage.removeItem(k); else localStorag
 let acces=(()=>{try{return JSON.parse(getLS(K_ACCES)||'null')||{};}catch(e){return {};}})();
 let pending=(()=>{try{return JSON.parse(getLS(K_PENDING)||'null')||{};}catch(e){return {};}})();
 let synced=null, lastVersion=null, flushing=false, flushTimer=null;
+/* etat de la liaison : loading (premiere lecture), ok, locked (code de consultation requis), offline */
+let etat='loading', baseFiable=false, dejaCadre=false;
+function codeLecture(){return acces.code||acces.lecture||'';}
 
 function canEdit(){return !SYNC_URL||!!acces.code;}
 function nbPending(){return Object.keys(pending).length;}
 function storePending(){setLS(K_PENDING,nbPending()?JSON.stringify(pending):null);}
-function storeAcces(){setLS(K_ACCES,acces.code?JSON.stringify(acces):null);}
+function storeAcces(){setLS(K_ACCES,(acces.code||acces.lecture||acces.nom)?JSON.stringify(acces):null);}
 
 function setStatus(msg){
   if(!SYNC_URL) return;
   const el=$('#saved'), n=nbPending();
-  el.classList.toggle('attente',n>0);
+  el.classList.toggle('attente',n>0||etat==='locked'||etat==='offline');
   if(msg) el.textContent=msg;
   else if(n) el.textContent=n+' modification'+(n>1?'s':'')+' en attente d\'envoi';
+  else if(etat==='locked') el.textContent='Code de consultation requis';
+  else if(etat==='offline') el.textContent='Hors ligne : données de l\'appareil';
+  else if(etat==='loading') el.textContent='Connexion au Sheet...';
   else if(!canEdit()) el.textContent='Lecture seule';
   else el.textContent='Synchronisé avec le Sheet'+(acces.nom?' · '+acces.nom:'');
 }
@@ -1844,7 +1870,9 @@ function snap(){
 }
 /* Compare l'etat courant a la derniere version du Sheet et met les differences en file d'attente */
 function diffQueue(){
-  if(!SYNC_URL||!synced||!canEdit()) return;
+  /* Rien n'est envoye tant que l'appareil n'a pas lu le Sheet au moins une fois : un appareil vide
+     ne doit jamais ecraser les donnees du club */
+  if(!SYNC_URL||!synced||!canEdit()||!baseFiable) return;
   const s=snap();
   Object.keys(s.t).forEach(id=>{if(s.t[id]!==synced.t[id]) pending[id]={action:'cible',cible:JSON.parse(s.t[id])};});
   Object.keys(synced.t).forEach(id=>{if(!(id in s.t)) pending[id]={action:'supprimer',id:id};});
@@ -1864,7 +1892,7 @@ function errText(err){
          err==='code'?'Code d\'édition incorrect.':'Le script a renvoyé une erreur.';
 }
 function handleErr(r){
-  if(r.err==='code'&&acces.code){acces={nom:acces.nom};storeAcces();updateEditUI();toast('Code d\'édition refusé : réactivez l\'édition.');}
+  if(r.err==='code'&&acces.code){acces={nom:acces.nom,lecture:acces.lecture};storeAcces();updateEditUI();toast('Code d\'édition refusé : réactivez l\'édition.');}
   else toast(r.message?errText(r.err)+' ('+r.message+')':errText(r.err));
 }
 
@@ -1892,7 +1920,7 @@ function applyServer(r){
     try{ if(cur&&JSON.parse(cur).targets.some(t=>t.cible||t.pas)&&!getLS(K_AVANT)) setLS(K_AVANT,cur); }catch(e){}
     setLS(K_SYNCOK,'1');
   }
-  lastVersion=r.version;
+  lastVersion=r.version; etat='ok'; baseFiable=true;
   const keepSel=sel;
   Object.keys(layers).forEach(dropLayers);
   state.targets=(r.cibles||[]).map(fromRow);
@@ -1913,24 +1941,42 @@ function applyServer(r){
   synced={t:ref,c:JSON.stringify({perimetre:Array.isArray(r.perimetre)?r.perimetre:[],reglages:r.reglages?Object.assign({},DEFAULT_SETTINGS,r.reglages):null,parcours:Array.isArray(r.parcours)?r.parcours:[]})};
   sel=byId(keepSel)?keepSel:null;
   localSave(); syncSettings(); drawPerim(); renderAll(); updateRestore(); setStatus();
+  if(!vueSauvee&&!dejaCadre){dejaCadre=true; fitPlaced();}
   diffQueue();
 }
 
+function showLock(on){const was=!$('#lock').hidden; $('#lock').hidden=!on; if(was!==on) renderList();}
 async function refresh(){
   try{
-    const r=await api({action:'lire',code:acces.code||''});
+    const r=await api({action:'lire',code:codeLecture()});
     if(!r.ok){
       if(!synced) synced=snap();
-      if(r.err==='code'&&!acces.code){setStatus('Code requis pour consulter');$('#acces').open=true;}
-      else handleErr(r);
-      return;
+      if(r.err==='code'&&!acces.code){
+        if(acces.lecture){acces.lecture='';storeAcces();}
+        etat='locked'; showLock(true);
+      }else{ if(etat==='loading') etat='offline'; handleErr(r); }
+      setStatus(); renderList(); return;
     }
-    if(r.version!==lastVersion||!synced) applyServer(r);
+    etat='ok'; showLock(false);
+    if(r.version!==lastVersion||!synced) applyServer(r); else setStatus();
   }catch(e){
     if(!synced) synced=snap();
-    setStatus(nbPending()?null:'Hors ligne : données de l\'appareil');
+    etat='offline'; setStatus(); renderList();
   }
 }
+$('#lock-form').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const code=$('#lock-code').value.trim(), msg=$('#lock-msg'); if(!code) return;
+  msg.textContent='Vérification...';
+  try{
+    const r=await api({action:'verifierLecture',code:code});
+    /* 'action' : script plus ancien sans cette verification, le code est alors essaye directement */
+    if(!r.ok&&r.err!=='action'){msg.textContent=r.err==='code'?'Code incorrect.':errText(r.err);return;}
+    acces.lecture=code; storeAcces(); $('#lock-code').value=''; msg.textContent='';
+    etat='loading'; setStatus(); renderList(); await refresh();
+    if(etat==='locked') $('#lock-msg').textContent='Code incorrect.';
+  }catch(err){msg.textContent='Connexion au script impossible : vérifiez le réseau.';}
+});
 function busy(){
   const a=document.activeElement;
   return !!mode||altiRunning||phBusy||!!phOpen||!!(a&&a.closest&&a.closest('.detail,.settings,#acces,.parc'));
@@ -1962,13 +2008,13 @@ $('#acces-form').addEventListener('submit',async e=>{
   try{
     const r=await api({action:'verifier',code:code});
     if(!r.ok){msg.textContent=errText(r.err);return;}
-    acces={code:code,nom:nom}; storeAcces();
+    acces={code:code,nom:nom,lecture:acces.lecture}; storeAcces();
     $('#acc-code').value=''; msg.textContent=''; $('#acces').open=false;
     updateEditUI(); toast('Édition activée');
     await flush(); await refresh();
   }catch(err){msg.textContent='Connexion au script impossible : vérifiez le réseau.';}
 });
-$('#acc-off').addEventListener('click',()=>{acces={nom:acces.nom};storeAcces();$('#acces').open=false;updateEditUI();toast('Lecture seule');});
+$('#acc-off').addEventListener('click',()=>{acces={nom:acces.nom,lecture:acces.lecture};storeAcces();$('#acces').open=false;updateEditUI();toast('Lecture seule');});
 $('#btn-restore').addEventListener('click',()=>{
   $('#menu').open=false;
   try{
@@ -1995,8 +2041,10 @@ $('#btn-restore').addEventListener('click',()=>{
 });
 
 async function startSync(){
+  baseFiable=avaitCache&&!!getLS(K_SYNCOK);
+  etat='loading';
   updateEditUI();
-  setStatus('Connexion au Sheet...');
+  setStatus(); renderList();
   if(acces.code&&nbPending()) await flush();
   await refresh();
   setInterval(poll,60000);
@@ -2013,7 +2061,7 @@ function showPublie(){
 }
 function fitPlaced(){
   const pa=parcoursActif().id, pts=state.targets.filter(t=>t.parc===pa).flatMap(t=>[t.cible,t.pas].concat((t.autres||[]).map(q=>q.pos)).filter(Boolean));
-  if(pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.2));
+  if(pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.2),{maxZoom:19});
 }
 /* Donnees de reference publiees a cote de la page (terrain.json dans le depot GitHub).
    Elles remplacent les donnees locales uniquement si elles sont plus recentes. */
