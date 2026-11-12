@@ -51,6 +51,7 @@ button{cursor:pointer}
 .btn:hover{border-color:var(--muted)}
 .btn.primary{background:var(--pine);border-color:var(--pine);color:var(--panel)}
 .btn.small{height:30px;padding:0 10px;font-size:13px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
 .btn.danger{color:var(--bad)}
 .btn.danger.armed{background:var(--bad);border-color:var(--bad);color:#fff}
 .menu{position:relative}
@@ -100,6 +101,19 @@ button{cursor:pointer}
 .st-warn{color:var(--warn)}
 .st-bad{color:var(--bad)}
 .add{margin:8px 16px 16px}
+.item.is-masquee .num,.item.is-masquee .it-main{opacity:.45}
+.item.is-butte{padding-left:30px}
+.item.is-butte .num{font-size:17px;color:var(--muted)}
+.it-butte{font-style:normal;font-weight:400;font-size:12px;color:var(--muted)}
+.tri-hint{margin:0;padding-bottom:6px}
+.sync.lecture .tri-hint{display:none}
+body:not(.lecture) #list li,body:not(.lecture) .parc-list li{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#list li.dragging,.parc-list li.dragging{position:relative;z-index:5;background:var(--panel);box-shadow:0 6px 18px rgba(0,0,0,.28);outline:2px solid var(--gold);outline-offset:-2px}
+#list li.dragging .item{background:var(--soft)}
+body.tri-en-cours,body.tri-en-cours *{cursor:grabbing!important}
+.pl-masquee .pl-name,.pl-masquee .pl-ord{opacity:.5}
+.pl-name em{font-style:normal;font-weight:400;font-size:12px;color:var(--muted)}
+.pl-act .btn.pl-mask{width:auto;padding:0 8px}
 
 .detail{border-bottom:1px solid var(--line);padding-block:12px 16px;display:flex;flex-direction:column;gap:12px;background:var(--soft)}
 .detail h2{margin:0;font:700 28px/1 var(--f-num);display:flex;align-items:baseline;gap:10px}
@@ -115,7 +129,7 @@ button{cursor:pointer}
 .form{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .form label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted);min-width:0}
 .form label.wide{grid-column:1/-1}
-.form input,.form textarea,.form select{border:1px solid var(--line);border-radius:5px;background:var(--panel);padding:6px 8px;color:var(--ink);font-size:14px;min-width:0}
+.form input,.form textarea,.form select,.settings select{border:1px solid var(--line);border-radius:5px;background:var(--panel);padding:6px 8px;color:var(--ink);font-size:14px;min-width:0}
 .form textarea{resize:vertical;min-height:58px}
 .hint{font-size:12px;color:var(--muted);margin:0}
 .piquets{display:flex;flex-direction:column;gap:6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:8px 10px}
@@ -162,6 +176,7 @@ button{cursor:pointer}
 .parc-stats div{background:var(--panel);padding:7px 8px;min-width:0}
 .parc-stats dt{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
 .parc-stats dd{margin:2px 0 0;font:600 17px/1.1 var(--f-num);font-variant-numeric:tabular-nums}
+.parc-stats dd small{font:400 11px var(--f-body);color:var(--muted)}
 .parc-list{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
 .parc-list li{border-top:1px solid var(--line);padding:6px 8px}
 .parc-list li:first-child{border-top:0}
@@ -345,6 +360,7 @@ button{cursor:pointer}
       <button type="button" data-f="alert" aria-pressed="false">Alertes</button>
       <button type="button" data-f="repair" aria-pressed="false">À réparer</button>
     </div>
+    <p class="hint pad edit-only tri-hint">Pour changer l'ordre de passage, maintenez une cible appuyée puis faites-la glisser.</p>
     <ul class="list" id="list"></ul>
     <button class="btn add edit-only" id="btn-add" type="button">Ajouter une cible</button>
 
@@ -359,6 +375,7 @@ button{cursor:pointer}
           <label>Tolérance écart (m)<input id="s-tol" type="number" min="0" step="0.5"></label>
           <label>Trajectoire derrière (m)<input id="s-traj" type="number" min="0" step="1"></label>
           <label>Largeur ligne de tir (m)<input id="s-lane" type="number" min="0" step="0.5"></label>
+          <label class="wide">Buttes supplémentaires d'une cible<select id="s-butte"><option value="bis">1 bis, 1 ter, 1 quater</option><option value="point">1.1, 1.2, 1.3</option></select></label>
           <label class="wide" style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input id="s-zones" type="checkbox"> Afficher et contrôler la zone de sécurité (rectangle rouge)</label>
         </div>
         <div class="actions">
@@ -452,7 +469,7 @@ const SEED=[
  {n:"23",buttes:"1",taille:"90",dAct:"?",dEnv:"?",faire:"- Accès trop compliqué\n- Déplacer cette cible",reparer:"RAS"},
  {n:"24",buttes:"3",taille:"90",dAct:"?",dEnv:"?",faire:"- Tout à refaire\n- Chemin\n- Arbre etc",reparer:"RAS"}
 ];
-const DEFAULT_SETTINGS={profondeur:50,demiLargeur:10,ouverture:10,tolerance:2,zoneSecu:false,trajDefaut:20,largeurDefaut:3};
+const DEFAULT_SETTINGS={profondeur:50,demiLargeur:10,ouverture:10,tolerance:2,zoneSecu:false,trajDefaut:20,largeurDefaut:3,butteStyle:'bis'};
 const KEY='terrainArc.saintvrain.v1';
 /* Adresse du script Google Apps Script du Sheet (se termine par /exec).
    Laissee vide : pas de synchronisation, l'appli fonctionne comme avant (appareil + terrain.json). */
@@ -491,6 +508,7 @@ function normalize(s){
     FIELDS.forEach(f=>{if(t[f]==null) t[f]='';});
     ['cible','pas'].forEach(k=>{if(!Array.isArray(t[k])) t[k]=null;});
     if(!COULEURS[t.pCoul]) t.pCoul='rouge';
+    t.masquee=t.masquee===true||t.masquee==='oui';
     t.autres=(Array.isArray(t.autres)?t.autres:[]).filter(q=>q&&Array.isArray(q.pos)).slice(0,MAX_AUTRES).map(q=>({c:COULEURS[q.c]?q.c:'blanc',pos:q.pos}));
   });
   s.parcours=(Array.isArray(s.parcours)?s.parcours:[]).filter(q=>q&&q.id).map(q=>({id:String(q.id),nom:String(q.nom||'Parcours'),
@@ -697,9 +715,9 @@ const NO_LABEL={addTo(){return this;}};
 function label(pos,html,z){if(!P('etiquettes')) return NO_LABEL; return L.marker(pos,{icon:L.divIcon({className:'',html:html,iconSize:null}),interactive:false,keyboard:false,zIndexOffset:z||0});}
 
 /* Seules les cibles du parcours choisi sont dessinees */
-function visibleOnMap(t){return t.parc===parcoursActif().id;}
+function visibleOnMap(t){return t.parc===parcoursActif().id&&(!t.masquee||t.id===sel);}
 function fitParcours(){
-  const pts=parcoursActif().cibles.map(byId).filter(Boolean).flatMap(t=>[t.cible,t.pas].filter(Boolean));
+  const pts=ciblesVisibles().flatMap(t=>[t.cible,t.pas].filter(Boolean));
   if(pts.length>1) map.fitBounds(L.latLngBounds(pts).pad(0.15),{maxZoom:19}); else if(pts.length) map.setView(pts[0],18);
 }
 function ensure(t){
@@ -808,12 +826,17 @@ function natCmp(a,b){
 function parcoursList(){return state.parcours;}
 function parcoursActif(){const l=parcoursList();return l.find(q=>q.id===state.parcActif)||l[0];}
 function materialize(q){return q;}
+/* Ordre de passage sans les cibles masquees : c'est lui qui sert au chemin, aux statistiques et au plan */
+function ordreVisible(q){return q.cibles.filter(id=>{const t=byId(id);return t&&!t.masquee;});}
 function prune(q){
-  const keys={}; for(let i=0;i<q.cibles.length-1;i++) keys[q.cibles[i]+'>'+q.cibles[i+1]]=1;
+  /* On garde les chemins des paires consecutives, avec et sans les cibles masquees, pour ne rien perdre en les re-affichant */
+  const keys={}, v=ordreVisible(q);
+  for(let i=0;i<q.cibles.length-1;i++) keys[q.cibles[i]+'>'+q.cibles[i+1]]=1;
+  for(let i=0;i<v.length-1;i++) keys[v[i]+'>'+v[i+1]]=1;
   ['via','alti'].forEach(k=>Object.keys(q[k]).forEach(x=>{if(!keys[x]) delete q[k][x];}));
 }
 function segPoints(q,i){
-  const A=byId(q.cibles[i]),B=byId(q.cibles[i+1]); if(!A||!B) return null;
+  const c=ordreVisible(q), A=byId(c[i]),B=byId(c[i+1]); if(!A||!B) return null;
   const s0=A.cible||A.pas, e0=B.pas||B.cible; if(!s0||!e0) return null;
   const key=A.id+'>'+B.id;
   return {key:key,A:A,B:B,pts:[s0].concat(q.via[key]||[],[e0])};
@@ -835,7 +858,7 @@ function midOf(pts){
 }
 function parcoursStats(q){
   let len=0,dp=0,dm=0,altiOk=true,manquants=0; const segs=[];
-  for(let i=0;i<q.cibles.length-1;i++){
+  for(let i=0;i<ordreVisible(q).length-1;i++){
     const sg=segPoints(q,i); if(!sg){manquants++;segs.push(null);altiOk=false;continue;}
     const l=pathLen(sg.pts); len+=l;
     const al=q.alti[sg.key], ok=!!(al&&al.h===geomHash(sg.pts));
@@ -852,8 +875,8 @@ function drawParcours(){
   parcLayer.clearLayers();
   const traceMode=!!(mode&&mode.type==='trace');
   if((presOn?!presOpts.chemin:state.parcShow===false)&&!traceMode) return;
-  const q=parcoursActif(), z=map.getZoom();
-  for(let i=0;i<q.cibles.length-1;i++){
+  const q=parcoursActif(), z=map.getZoom(), vis=ordreVisible(q);
+  for(let i=0;i<vis.length-1;i++){
     const sg=segPoints(q,i); if(!sg) continue;
     const enCours=traceMode&&mode.key===sg.key;
     const pts=enCours?[sg.pts[0]].concat(mode.pts,[sg.pts[sg.pts.length-1]]):sg.pts;
@@ -863,15 +886,15 @@ function drawParcours(){
     if(z>=18||enCours) label(midOf(pts),'<div class="mk-parc">'+esc(sg.A.n)+' → '+esc(sg.B.n)+' · '+fmt(pathLen(pts),0)+' m</div>',150).addTo(parcLayer);
     if(enCours) mode.pts.forEach(v=>L.marker(v,{icon:L.divIcon({className:'',html:'<div class="mk-perim"></div>',iconSize:[10,10],iconAnchor:[5,5]}),interactive:false}).addTo(parcLayer));
   }
-  const A=byId(q.cibles[0]), B=byId(q.cibles[q.cibles.length-1]);
-  if(A&&(A.pas||A.cible)&&q.cibles.length>1) label(A.pas||A.cible,'<div class="mk-parc" style="transform:translate(-50%,-160%)">Départ</div>',160).addTo(parcLayer);
-  if(B&&(B.cible||B.pas)&&q.cibles.length>1) label(B.cible||B.pas,'<div class="mk-parc" style="transform:translate(-50%,-190%)">Arrivée</div>',160).addTo(parcLayer);
+  const A=byId(vis[0]), B=byId(vis[vis.length-1]);
+  if(A&&(A.pas||A.cible)&&vis.length>1) label(A.pas||A.cible,'<div class="mk-parc" style="transform:translate(-50%,-160%)">Départ</div>',160).addTo(parcLayer);
+  if(B&&(B.cible||B.pas)&&vis.length>1) label(B.cible||B.pas,'<div class="mk-parc" style="transform:translate(-50%,-190%)">Arrivée</div>',160).addTo(parcLayer);
 }
 map.on('zoomend',drawParcours);
 
 /* Troncon qui suit celui-ci dans le parcours affiche */
 function segSuivant(key){
-  const c=parcoursActif().cibles, i=c.findIndex((id,k)=>k<c.length-1&&id+'>'+c[k+1]===key);
+  const c=ordreVisible(parcoursActif()), i=c.findIndex((id,k)=>k<c.length-1&&id+'>'+c[k+1]===key);
   return (i>=0&&i+2<c.length)?c[i+1]+'>'+c[i+2]:null;
 }
 /* Enregistrement du chemin reel en marchant : un point tous les 4 m, si la precision est suffisante */
@@ -920,7 +943,7 @@ async function altiSeg(pts){
 async function computeAlti(){
   if(altiRunning) return; altiRunning=true;
   const q=materialize(parcoursActif()); let faits=0,echecs=0,total=0;
-  for(let i=0;i<q.cibles.length-1;i++){
+  for(let i=0;i<ordreVisible(q).length-1;i++){
     const sg=segPoints(q,i); if(!sg) continue;
     const h=geomHash(sg.pts); if(q.alti[sg.key]&&q.alti[sg.key].h===h) continue;
     total++; const btn=$('#parc-alti'); if(btn) btn.textContent='Calcul en cours ('+(faits+echecs+1)+')';
@@ -1108,8 +1131,50 @@ document.addEventListener('click',e=>{if(!e.target.closest('.search')) $('#resul
 
 /* ---------- Liste et resume ---------- */
 function ciblesActives(){return parcoursActif().cibles.map(byId).filter(Boolean);}
+/* Buttes d'une meme cible : meme numero de base ("1", "1 bis", "1 ter", "1.1"...) dans le meme parcours */
+const SUFFIXES=['','bis','ter','quater','quinquies','sexies','septies','octies'];
+function baseNum(n){return String(n==null?'':n).trim().replace(/\s*(bis|ter|quater|quinquies|sexies|septies|octies)$/i,'').replace(/\.\d+$/,'').trim();}
+function groupeButtes(t){const b=baseNum(t.n); return ciblesActives().filter(x=>baseNum(x.n)===b);}
+function nomButteSuivante(t){
+  const b=baseNum(t.n), pris={}; ciblesActives().forEach(x=>{pris[String(x.n).trim().toLowerCase()]=1;});
+  const style=state.settings.butteStyle==='point'?'point':'bis';
+  for(let k=1;k<50;k++){
+    const nom=style==='point'?b+'.'+k:(SUFFIXES[k]?b+' '+SUFFIXES[k]:b+'.'+k);
+    if(!pris[nom.toLowerCase()]) return nom;
+  }
+  return b+'.'+Date.now().toString(36);
+}
+/* Ajout possible seulement si la fiche annonce plus de buttes qu'il n'en existe deja */
+function etatButte(t){
+  const n=Math.max(1,Math.floor(numFirst(t.buttes)||1)), g=groupeButtes(t).length;
+  if(n<=1) return {ok:false,txt:'Ajouter une butte',aide:'Indiquez au moins 2 dans le champ Buttes pour ajouter une butte.'};
+  if(g>=n) return {ok:false,txt:'Buttes créées : '+g+'/'+n,aide:'Toutes les buttes annoncées existent. Augmentez le champ Buttes pour en ajouter.'};
+  return {ok:true,txt:'Ajouter une butte ('+nomButteSuivante(t)+')',aide:''};
+}
+function boutonButte(t){
+  const e=etatButte(t);
+  return '<button class="btn small" type="button" data-a="butte"'+(e.ok?'':' disabled')+(e.aide?' title="'+esc(e.aide)+'"':'')+'>'+esc(e.txt)+'</button>';
+}
+function majBoutonButte(t){
+  const b=document.querySelector('[data-a="butte"]'); if(!b) return;
+  const e=etatButte(t); b.disabled=!e.ok; b.textContent=e.txt; if(e.aide) b.title=e.aide; else b.removeAttribute('title');
+}
+function ajouterButte(t){
+  if(!t||!canEdit()||!etatButte(t).ok) return;
+  const q=parcoursActif(), grp=groupeButtes(t);
+  const c={id:'t'+uid(),parc:q.id,n:nomButteSuivante(t),buttes:t.buttes,taille:t.taille,dAct:t.dAct,dEnv:t.dEnv,faire:'',reparer:'',
+    trajLen:t.trajLen,largeur:t.largeur,protection:t.protection,pCoul:t.pCoul,autres:[],masquee:false,cible:null,pas:null,zCible:null,zPas:null};
+  /* Juste apres la derniere butte du groupe dans l'ordre de passage */
+  const pos=Math.max.apply(null,grp.map(x=>q.cibles.indexOf(x.id)));
+  state.targets.push(c); q.cibles.splice(pos+1,0,c.id);
+  prune(q); save(); filter='all';
+  document.querySelectorAll('#filters [data-f]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.f==='all')));
+  select(c.id,false); setMode({type:'cible',id:c.id});
+  toast('Cible '+c.n+' créée : placez sa butte puis son pas de tir');
+}
+function ciblesVisibles(){return ciblesActives().filter(t=>!t.masquee);}
 function renderSummary(){
-  const all=ciblesActives().map(t=>({t:t,a:analyse(t)}));
+  const all=ciblesVisibles().map(t=>({t:t,a:analyse(t)}));
   const placed=all.filter(x=>x.a.placed).length;
   const alerts=all.filter(x=>x.a.status==='warn'||x.a.status==='bad').length;
   const rep=all.reduce((n,x)=>n+lines(x.t.reparer).length,0);
@@ -1132,17 +1197,18 @@ function chipFor(a){
 }
 function renderList(){
   renderSummary();
-  const actives=ciblesActives();
+  const actives=ciblesActives().filter(t=>canEdit()||!t.masquee);
   const rows=actives.map(t=>{
     const a=analyse(t); if(!matches(t,a)) return '';
     const env=(t.dEnv&&t.dEnv!==t.dAct&&String(t.dEnv).trim()!=='?')?' → '+esc(t.dEnv):'';
     const nRep=lines(t.reparer).length;
     const nPh=photosDe(t.id).length;
+    const grp=groupeButtes(t), rang=grp.length>1?grp.indexOf(t)+1:0;
     const meta=esc(t.taille||'?')+' cm · '+esc(t.buttes||'1')+' butte'+((+t.buttes>1)?'s':'')+' · '+esc(t.dAct||'?')+' m'+env+(nRep?' · '+nRep+' répar.':'')+(t.protection==='aucune'?' · sans protection':'')+(nPh?' · '+nPh+' photo'+(nPh>1?'s':''):'');
-    return '<li><button type="button" class="item'+(sel===t.id?' is-sel':'')+'" data-id="'+t.id+'">'+
+    return '<li data-sort-id="'+esc(t.id)+'"><button type="button" class="item'+(sel===t.id?' is-sel':'')+(t.masquee?' is-masquee':'')+(rang>1?' is-butte':'')+'" data-id="'+t.id+'">'+
       '<span class="num'+(String(t.n).length>3?' long':'')+'">'+esc(t.n)+'</span>'+
-      '<span class="it-main"><span class="it-title">Cible '+esc(t.n)+'</span><span class="it-meta">'+meta+'</span></span>'+
-      chipFor(a)+'</button></li>';
+      '<span class="it-main"><span class="it-title">Cible '+esc(t.n)+(rang?' <em class="it-butte">butte '+rang+'/'+grp.length+'</em>':'')+'</span><span class="it-meta">'+meta+'</span></span>'+
+      (t.masquee?'<span class="chip st-none">Masquée</span>':chipFor(a))+'</button></li>';
   }).join('');
   const vide=actives.length?'Aucune cible dans ce filtre.':
     (SYNC_URL&&etat==='locked')?'Entrez le code de consultation ci-dessus pour voir les cibles du club.':
@@ -1160,6 +1226,82 @@ $('#filters').addEventListener('click',e=>{
   renderList();
 });
 
+function basculerMasque(t){
+  if(!t||!canEdit()) return;
+  t.masquee=!t.masquee; prune(parcoursActif());
+  save(); ensure(t); renderList(); renderDetail(); drawParcours();
+  toast('Cible '+t.n+(t.masquee?' masquée':' de nouveau affichée'));
+}
+
+/* ---------- Changer l'ordre en maintenant une cible (liste et panneau Parcours) ----------
+   Souris : on appuie et on deplace. Ecran tactile : appui long, puis on glisse (un simple glissement fait defiler). */
+let drag=null, clicBloque=false;
+const APPUI_LONG=380;
+function zoneVisible(){
+  const side=$('.side'), cs=getComputedStyle(side);
+  if(/(auto|scroll)/.test(cs.overflowY)&&side.scrollHeight>side.clientHeight){const r=side.getBoundingClientRect();return {el:side,top:r.top,bottom:r.bottom};}
+  const mw=$('.mapwrap').getBoundingClientRect();
+  return {el:window,top:Math.max(0,getComputedStyle($('.mapwrap')).position==='sticky'?mw.bottom:0),bottom:window.innerHeight};
+}
+function debutDrag(st){
+  if(drag!==st||st.actif) return;
+  clearTimeout(st.timer); st.actif=true;
+  st.li.classList.add('dragging'); document.body.classList.add('tri-en-cours');
+  try{if(navigator.vibrate) navigator.vibrate(15);}catch(e){}
+  const pas=()=>{
+    if(drag!==st) return;
+    const z=zoneVisible(), y=st.y, bord=56; let dy=0;
+    if(y<z.top+bord) dy=-Math.ceil((z.top+bord-y)/4); else if(y>z.bottom-bord) dy=Math.ceil((y-(z.bottom-bord))/4);
+    if(dy){if(z.el===window) window.scrollBy(0,dy); else z.el.scrollTop+=dy; placerDrag(st);}
+    st.raf=requestAnimationFrame(pas);
+  };
+  st.raf=requestAnimationFrame(pas);
+}
+function placerDrag(st){
+  const items=[...st.box.children].filter(x=>x.dataset&&x.dataset.sortId);
+  for(const it of items){
+    if(it===st.li) continue;
+    const r=it.getBoundingClientRect();
+    if(st.y<r.top+r.height/2){if(st.li.nextElementSibling!==it) st.box.insertBefore(st.li,it); return;}
+  }
+  if(st.box.lastElementChild!==st.li) st.box.appendChild(st.li);
+}
+function finDrag(st){
+  cancelAnimationFrame(st.raf); clearTimeout(st.timer);
+  st.li.classList.remove('dragging'); document.body.classList.remove('tri-en-cours');
+  clicBloque=true; setTimeout(()=>{clicBloque=false;},80);
+  const sous=[...st.box.children].map(x=>x.dataset&&x.dataset.sortId).filter(Boolean);
+  const q=parcoursActif(), dans={}; sous.forEach(id=>{dans[id]=1;});
+  let k=0; const nouv=q.cibles.map(id=>dans[id]?sous[k++]:id);
+  if(nouv.join()!==q.cibles.join()){q.cibles=nouv; prune(q); save(); redrawAll(); drawParcours(); toast('Ordre de passage modifié');}
+  renderList();
+}
+document.addEventListener('pointerdown',e=>{
+  if(drag||!canEdit()||(e.pointerType==='mouse'&&e.button!==0)) return;
+  const li=e.target.closest('[data-sort-id]'); if(!li||!li.parentElement) return;
+  if(e.target.closest('.pl-act,.lnk,input,select,textarea')) return;
+  const st={li:li,box:li.parentElement,x0:e.clientX,y0:e.clientY,y:e.clientY,pid:e.pointerId,souris:e.pointerType==='mouse',actif:false};
+  if(!st.souris) st.timer=setTimeout(()=>debutDrag(st),APPUI_LONG);
+  drag=st;
+});
+document.addEventListener('pointermove',e=>{
+  const st=drag; if(!st||e.pointerId!==st.pid) return;
+  st.y=e.clientY;
+  if(!st.actif){
+    if(Math.hypot(e.clientX-st.x0,e.clientY-st.y0)>8){ if(st.souris) debutDrag(st); else {clearTimeout(st.timer); drag=null;} }
+    return;
+  }
+  e.preventDefault(); placerDrag(st);
+});
+['pointerup','pointercancel'].forEach(ev=>document.addEventListener(ev,e=>{
+  const st=drag; if(!st||e.pointerId!==st.pid) return;
+  drag=null; if(st.actif) finDrag(st); else clearTimeout(st.timer);
+}));
+/* Pendant le glisser : pas de defilement de la page, pas de menu contextuel, pas de clic a la fin */
+document.addEventListener('touchmove',e=>{if(drag&&drag.actif) e.preventDefault();},{passive:false});
+document.addEventListener('contextmenu',e=>{if(canEdit()&&e.target.closest&&e.target.closest('[data-sort-id]')) e.preventDefault();});
+document.addEventListener('click',e=>{if(clicBloque){e.stopPropagation();e.preventDefault();}},true);
+
 /* ---------- Panneau parcours ---------- */
 let parcNewOpen=false;
 function parcLabel(x){return x.nom+(x.type&&x.nom!==PARC_TYPES[x.type]?' · '+PARC_TYPES[x.type]:'');}
@@ -1172,7 +1314,8 @@ function renderParcours(){
   const box=$('#parc-body'); if(!box) return;
   const list=parcoursList(), q=parcoursActif(), st=parcoursStats(q), ed=canEdit();
   const typeOpts=cur=>Object.keys(PARC_TYPES).map(k=>'<option value="'+k+'"'+(k===cur?' selected':'')+'>'+PARC_TYPES[k]+'</option>').join('');
-  $('#parc-sum').textContent=parcLabel(q)+' · '+q.cibles.length+' cible'+(q.cibles.length>1?'s':'')+' · '+fmtLen(st.len);
+  const nVis=ordreVisible(q).length, nMasq=q.cibles.length-nVis;
+  $('#parc-sum').textContent=parcLabel(q)+' · '+nVis+' cible'+(nVis>1?'s':'')+(nMasq?' (+'+nMasq+' masquée'+(nMasq>1?'s':'')+')':'')+' · '+fmtLen(st.len);
   const stat=(k,v)=>'<div><dt>'+k+'</dt><dd>'+v+'</dd></div>';
   let h='<div class="parc-head"><select id="parc-sel" aria-label="Parcours affiché">'+
     list.map(x=>'<option value="'+esc(x.id)+'"'+(x.id===q.id?' selected':'')+'>'+esc(parcLabel(x))+'</option>').join('')+'</select>'+
@@ -1192,7 +1335,7 @@ function renderParcours(){
       '<div class="parc-tools"><button class="btn small primary" type="button" data-p="create">Créer le parcours</button>'+
       '<button class="btn small" type="button" data-p="new">Annuler</button></div></div>';
   }
-  h+='<dl class="parc-stats">'+stat('Cibles',q.cibles.length)+stat('Longueur',fmtLen(st.len))+
+  h+='<dl class="parc-stats">'+stat('Cibles',nVis+(nMasq?' <small>+'+nMasq+' masquée'+(nMasq>1?'s':'')+'</small>':''))+stat('Longueur',fmtLen(st.len))+
     stat('Dénivelé',st.altiOk?'+'+fmt(st.dp,0)+' / −'+fmt(st.dm,0)+' m':'—')+stat('Marche',fmtMin(st.temps))+'</dl>';
   const notes=[];
   if(st.manquants) notes.push(st.manquants+' tronçon'+(st.manquants>1?'s':'')+' sans mesure : cible ou pas de tir pas encore placé.');
@@ -1200,14 +1343,18 @@ function renderParcours(){
   h+='<p class="hint">'+notes.join(' ')+'</p>';
   h+='<div class="parc-tools">'+(ed&&st.segs.some(Boolean)?'<button class="btn small" type="button" data-p="alti" id="parc-alti">'+(st.altiOk?'Recalculer le dénivelé':'Calculer le dénivelé')+'</button>':'')+
     '<button class="btn small" type="button" data-p="plan">Plan à présenter</button></div>';
+  const vis=ordreVisible(q);
   h+='<ol class="parc-list">'+q.cibles.map((id,i)=>{
     const t=byId(id); if(!t) return '';
-    const sg=st.segs[i];
-    let li='<li><div class="pl-row"><span class="pl-ord">'+(i+1)+'</span><button type="button" class="pl-name" data-p="go" data-id="'+esc(id)+'">Cible '+esc(t.n)+'</button>';
-    if(ed) li+='<span class="pl-act"><button class="btn small" type="button" data-p="up" data-i="'+i+'" aria-label="Monter"'+(i?'':' disabled')+'>↑</button>'+
+    if(t.masquee&&!ed) return '';
+    const j=vis.indexOf(id), sg=j>=0?st.segs[j]:null;
+    let li='<li data-sort-id="'+esc(id)+'"'+(t.masquee?' class="pl-masquee"':'')+'><div class="pl-row"><span class="pl-ord">'+(j>=0?j+1:'–')+'</span>'+
+      '<button type="button" class="pl-name" data-p="go" data-id="'+esc(id)+'">Cible '+esc(t.n)+(t.masquee?' <em>masquée</em>':'')+'</button>';
+    if(ed) li+='<span class="pl-act"><button class="btn small pl-mask" type="button" data-p="mask" data-id="'+esc(id)+'">'+(t.masquee?'Afficher':'Masquer')+'</button>'+
+      '<button class="btn small" type="button" data-p="up" data-i="'+i+'" aria-label="Monter"'+(i?'':' disabled')+'>↑</button>'+
       '<button class="btn small" type="button" data-p="down" data-i="'+i+'" aria-label="Descendre"'+(i<q.cibles.length-1?'':' disabled')+'>↓</button></span>';
     li+='</div>';
-    if(i<q.cibles.length-1){
+    if(j>=0&&j<vis.length-1){
       li+='<div class="pl-seg">'+(sg?fmt(sg.len,0)+' m, '+(sg.dessine?'chemin dessiné':'ligne droite')+(sg.alti?', +'+fmt(sg.alti.dp,0)+' / −'+fmt(sg.alti.dm,0)+' m':''):'tronçon incomplet');
       if(ed&&sg) li+=' <button class="lnk" type="button" data-p="trace" data-key="'+esc(sg.key)+'">'+(sg.dessine?'Redessiner':'Dessiner le chemin')+'</button>'+
         (sg.dessine?' <button class="lnk" type="button" data-p="straight" data-key="'+esc(sg.key)+'">Ligne droite</button>':'');
@@ -1257,6 +1404,7 @@ $('#parc-body').addEventListener('click',e=>{
     toast('Parcours « '+q.nom+' » créé'+(src?' avec '+q.cibles.length+' cibles copiées':''));
     return;
   }
+  if(a==='mask'){basculerMasque(byId(b.dataset.id));return;}
   const q=parcoursActif(), i=+b.dataset.i;
   if(a==='up'&&i>0) q.cibles.splice(i-1,0,q.cibles.splice(i,1)[0]);
   else if(a==='down'&&i<q.cibles.length-1) q.cibles.splice(i+1,0,q.cibles.splice(i,1)[0]);
@@ -1285,7 +1433,7 @@ $('#parc-body').addEventListener('input',e=>{
 function swatch(inner){return '<svg viewBox="0 0 36 18" aria-hidden="true">'+inner+'</svg>';}
 function titreDefaut(q){return /^parcours\b/i.test(q.nom)?q.nom:'Parcours « '+q.nom+' »';}
 function renderPres(){
-  const q=parcoursActif(), st=parcoursStats(q), cs=ciblesActives(), o=presOpts;
+  const q=parcoursActif(), st=parcoursStats(q), cs=ciblesVisibles(), o=presOpts;
   const date=new Date().toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
   $('#pg-titre').textContent=$('#pr-titre').value.trim()||titreDefaut(q);
   $('#pg-sous').textContent=[q.type?PARC_TYPES[q.type]:'',cs.length+' cible'+(cs.length>1?'s':''),'plan établi le '+date].filter(Boolean).join(' · ');
@@ -1480,7 +1628,9 @@ function renderDetail(){
       '<button class="btn small" type="button" data-a="gps-cible">Cible ici (GPS)</button>'+
       '<button class="btn small" type="button" data-a="gps-pas">Pas de tir ici (GPS)</button>'+
       ((t.cible||t.pas)?'<button class="btn small" type="button" data-a="clear">Retirer de la carte</button>':'')+
-    '</div>'+piquetsHTML(t)+
+      boutonButte(t)+
+      '<button class="btn small" type="button" data-a="masquer">'+(t.masquee?'Afficher dans le parcours':'Masquer du parcours')+'</button>'+
+    '</div>'+(t.masquee?'<p class="hint">Cible masquée : elle n\'apparaît ni sur la carte, ni dans le chemin, ni sur le plan. Ses données sont conservées.</p>':'')+piquetsHTML(t)+
     '<p class="hint edit-only">Les marqueurs se déplacent à la souris ou au doigt. Losanges : piquets, dans leur couleur. Bande verte : ligne de tir (orange ou rouge en cas d\'alerte). Barre bleue : protection. Tirets après la cible : trajectoire. Pointillés avant le pas : distance envisagée.</p>'+
     '<div class="form">'+
       field('n','N°','')+field('buttes','Buttes','number')+field('taille','Taille (cm)','')+
@@ -1582,6 +1732,8 @@ $('#detail-slot').addEventListener('click',e=>{
     const k=a==='place-cible'?'cible':'pas';
     setMode(mode&&mode.type===k&&mode.id===t.id?null:{type:k,id:t.id});
   }
+  else if(a==='masquer') basculerMasque(t);
+  else if(a==='butte') ajouterButte(t);
   else if(a==='gps-cible') gpsPlace(t,'cible');
   else if(a==='gps-pas') gpsPlace(t,'pas');
   else if(a==='place-autre'||a==='add-autre'){
@@ -1610,13 +1762,15 @@ $('#detail-slot').addEventListener('input',e=>{
   const t=byId(sel); if(!t) return;
   if(k==='pCoul'){t.pCoul=e.target.value; ensure(t); save(); renderDetail(); return;}
   t[k]=e.target.value; saveSoon();
+  /* Le nombre de buttes est le meme pour toutes les buttes d'une cible */
+  if(k==='buttes'){groupeButtes(t).forEach(x=>{if(x!==t) x.buttes=t.buttes;}); majBoutonButte(t);}
   ensure(t); renderList(); renderMeasures();
   const h=$('.detail h2'); if(h&&(k==='n'||k==='taille')) h.innerHTML='Cible '+esc(t.n)+' <small>'+esc(t.taille||'?')+' cm</small>';
 });
 
 $('#btn-add').addEventListener('click',()=>{
   const q=parcoursActif(), max=ciblesActives().reduce((m,t)=>Math.max(m,numFirst(t.n)||0),0);
-  const t={id:'t'+uid(),parc:q.id,n:String(max+1),buttes:'1',taille:'90',dAct:'',dEnv:'',faire:'',reparer:'',trajLen:'',largeur:'',protection:'',pCoul:'rouge',autres:[],cible:null,pas:null,zCible:null,zPas:null};
+  const t={id:'t'+uid(),parc:q.id,n:String(Math.floor(max)+1),buttes:'1',taille:'90',dAct:'',dEnv:'',faire:'',reparer:'',trajLen:'',largeur:'',protection:'',pCoul:'rouge',autres:[],cible:null,pas:null,zCible:null,zPas:null};
   state.targets.push(t); q.cibles.push(t.id); save(); filter='all';
   document.querySelectorAll('#filters [data-f]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.f==='all')));
   select(t.id,false); setMode({type:'cible',id:t.id});
@@ -1638,10 +1792,13 @@ function bindSetting(id,key,isBool){
 bindSetting('#s-prof','profondeur');bindSetting('#s-larg','demiLargeur');bindSetting('#s-ouv','ouverture');
 bindSetting('#s-tol','tolerance');bindSetting('#s-zones','zoneSecu',true);
 bindSetting('#s-traj','trajDefaut');bindSetting('#s-lane','largeurDefaut');
+$('#s-butte').value=state.settings.butteStyle||'bis';
+$('#s-butte').addEventListener('change',e=>{state.settings.butteStyle=e.target.value;saveSoon();renderDetail();});
 function syncSettings(){
   const m={'#s-prof':'profondeur','#s-larg':'demiLargeur','#s-ouv':'ouverture','#s-tol':'tolerance','#s-traj':'trajDefaut','#s-lane':'largeurDefaut'};
   Object.keys(m).forEach(id=>{$(id).value=state.settings[m[id]];});
   $('#s-zones').checked=!!state.settings.zoneSecu;
+  $('#s-butte').value=state.settings.butteStyle==='point'?'point':'bis';
 }
 let resetArmed=false;
 $('#btn-reset').addEventListener('click',e=>{
@@ -1668,7 +1825,7 @@ function exportKML(){
   if(state.perimetre.length>=3) pm.push('<Placemark><name>Périmètre du terrain</name><styleUrl>#perim</styleUrl><Polygon><outerBoundaryIs><LinearRing><coordinates>'+state.perimetre.concat([state.perimetre[0]]).map(kc).join(' ')+'</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>');
   parcoursList().forEach(P=>{
   pm.push('<Folder><name>'+xml(parcLabel(P))+'</name>');
-  P.cibles.map(byId).filter(Boolean).forEach(t=>{
+  P.cibles.map(byId).filter(t=>t&&!t.masquee).forEach(t=>{
     const a=analyse(t);
     const desc=xml('Taille '+(t.taille||'?')+' cm, '+(t.buttes||1)+' butte(s). Inventaire '+(t.dAct||'?')+' m, envisagé '+(t.dEnv||'?')+' m'+(a.placed?'. Mesuré '+fmt(a.dist)+' m':'')+'. Protection derrière : '+(PROTECTIONS[t.protection||'']||t.protection)+'. A faire : '+(lines(t.faire).join(' ; ')||'RAS')+'. A réparer : '+(lines(t.reparer).join(' ; ')||'RAS'));
     if(t.cible) pm.push('<Placemark><name>Cible '+xml(t.n)+'</name><description>'+desc+'</description><styleUrl>#cible</styleUrl><Point><coordinates>'+kc(t.cible)+'</coordinates></Point></Placemark>');
@@ -1685,7 +1842,7 @@ function exportKML(){
       if(a.largeur>0) pm.push('<Placemark><name>Ligne de tir '+xml(t.n)+' ('+fmt(a.largeur,1)+' m)</name><styleUrl>#couloir</styleUrl><Polygon><outerBoundaryIs><LinearRing><coordinates>'+a.couloir.concat([a.couloir[0]]).map(kc).join(' ')+'</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>');
     }
   });
-  const lignes=[]; for(let i=0;i<P.cibles.length-1;i++){const sg=segPoints(P,i); if(sg) lignes.push('<LineString><tessellate>1</tessellate><coordinates>'+sg.pts.map(kc).join(' ')+'</coordinates></LineString>');}
+  const lignes=[]; for(let i=0;i<ordreVisible(P).length-1;i++){const sg=segPoints(P,i); if(sg) lignes.push('<LineString><tessellate>1</tessellate><coordinates>'+sg.pts.map(kc).join(' ')+'</coordinates></LineString>');}
   if(lignes.length) pm.push('<Placemark><name>Chemin ('+fmtLen(parcoursStats(P).len)+')</name><styleUrl>#parc</styleUrl><MultiGeometry>'+lignes.join('')+'</MultiGeometry></Placemark>');
   pm.push('</Folder>');
   });
@@ -1706,7 +1863,7 @@ function ll2(p){return [+p[1].toFixed(7),+p[0].toFixed(7)];}
 function exportGeoJSON(){
   const f=[];
   if(state.perimetre.length>=3) f.push({type:'Feature',properties:{type:'perimetre'},geometry:{type:'Polygon',coordinates:[state.perimetre.concat([state.perimetre[0]]).map(ll2)]}});
-  state.targets.forEach(t=>{
+  state.targets.filter(t=>!t.masquee).forEach(t=>{
     const a=analyse(t), props={parcours:nomParcours(t.parc),n:t.n,buttes:t.buttes,taille_cm:t.taille,distance_inventaire:t.dAct,distance_envisagee:t.dEnv,a_faire:t.faire,a_reparer:t.reparer,protection:t.protection||''};
     if(t.cible) f.push({type:'Feature',properties:Object.assign({type:'cible',altitude:t.zCible},props),geometry:{type:'Point',coordinates:ll2(t.cible)}});
     if(t.pas) f.push({type:'Feature',properties:{type:'pas_de_tir',n:t.n,couleur:t.pCoul,principal:true,altitude:t.zPas},geometry:{type:'Point',coordinates:ll2(t.pas)}});
@@ -1720,18 +1877,18 @@ function exportGeoJSON(){
     }
   });
   parcoursList().forEach(q=>{
-    const lignes=[]; for(let i=0;i<q.cibles.length-1;i++){const sg=segPoints(q,i); if(sg) lignes.push(sg.pts.map(ll2));}
+    const lignes=[]; for(let i=0;i<ordreVisible(q).length-1;i++){const sg=segPoints(q,i); if(sg) lignes.push(sg.pts.map(ll2));}
     if(lignes.length) f.push({type:'Feature',properties:{type:'parcours',nom:q.nom,longueur_m:Math.round(parcoursStats(q).len),cibles:q.cibles.map(id=>(byId(id)||{}).n)},geometry:{type:'MultiLineString',coordinates:lignes}});
   });
   download('terrain-saint-vrain-'+stamp()+'.geojson','application/geo+json',JSON.stringify({type:'FeatureCollection',features:f},null,1));
 }
 function csvCell(v){v=String(v==null?'':v);return /[",;\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}
 function exportCSV(){
-  const head=CSV_HEAD.concat(['Distance mesurée (m)','Latitude cible','Longitude cible','Latitude pas','Longitude pas','Largeur ligne de tir (m)','Trajectoire derrière cible (m)','Protection derrière cible','Couleur pas de tir','Autres piquets','Parcours']);
+  const head=CSV_HEAD.concat(['Distance mesurée (m)','Latitude cible','Longitude cible','Latitude pas','Longitude pas','Largeur ligne de tir (m)','Trajectoire derrière cible (m)','Protection derrière cible','Couleur pas de tir','Autres piquets','Parcours','Masquée']);
   const rows=parcoursList().flatMap(P=>P.cibles.map(byId).filter(Boolean)).map(t=>{
     const a=analyse(t);
     return [t.n,t.buttes,t.taille,t.dAct,t.dEnv,t.faire,t.reparer,a.placed?a.dist.toFixed(1):'',
-      t.cible?t.cible[0].toFixed(7):'',t.cible?t.cible[1].toFixed(7):'',t.pas?t.pas[0].toFixed(7):'',t.pas?t.pas[1].toFixed(7):'',t.largeur,t.trajLen,PROTECTIONS[t.protection||'']||t.protection,coul(t.pCoul).l,a.autres.map(q=>coul(q.c).l+' '+q.dist.toFixed(1)+' m').join(' / '),nomParcours(t.parc)].map(csvCell).join(',');
+      t.cible?t.cible[0].toFixed(7):'',t.cible?t.cible[1].toFixed(7):'',t.pas?t.pas[0].toFixed(7):'',t.pas?t.pas[1].toFixed(7):'',t.largeur,t.trajLen,PROTECTIONS[t.protection||'']||t.protection,coul(t.pCoul).l,a.autres.map(q=>coul(q.c).l+' '+q.dist.toFixed(1)+' m').join(' / '),nomParcours(t.parc),t.masquee?'oui':''].map(csvCell).join(',');
   });
   download('terrain-saint-vrain-'+stamp()+'.csv','text/csv;charset=utf-8','﻿'+[head.map(csvCell).join(',')].concat(rows).join('\r\n'));
 }
@@ -1849,6 +2006,7 @@ function fromRow(o){
   t.zCible=numOrNull(o.zCible); t.zPas=numOrNull(o.zPas);
   t.pCoul=coulKey(o.pCoul);
   t.parc=String(o.parcId==null?'':o.parcId);
+  t.masquee=/^(oui|1|true|x)$/i.test(String(o.masquee==null?'':o.masquee).trim());
   t.autres=[];
   try{(JSON.parse(o.autres||'[]')||[]).forEach(q=>{const la=numOrNull(q.lat),lo=numOrNull(q.lng); if(la!=null&&lo!=null&&t.autres.length<MAX_AUTRES) t.autres.push({c:coulKey(q.c),pos:[la,lo]});});}catch(e){}
   return t;
@@ -1860,7 +2018,7 @@ function toRow(t){
     dist:a.placed?Math.round(a.dist*10)/10:'',
     cLat:t.cible?c(t.cible[0]):'',cLng:t.cible?c(t.cible[1]):'',pLat:t.pas?c(t.pas[0]):'',pLng:t.pas?c(t.pas[1]):'',
     zCible:t.zCible==null?'':t.zCible,zPas:t.zPas==null?'':t.zPas,
-    pCoul:coul(t.pCoul).l,parcId:t.parc,
+    pCoul:coul(t.pCoul).l,parcId:t.parc,masquee:t.masquee?'oui':'',
     autres:(t.autres||[]).filter(q=>q.pos).length?JSON.stringify(t.autres.filter(q=>q.pos).map(q=>({c:q.c,lat:c(q.pos[0]),lng:c(q.pos[1])}))):'',
     dPiquets:a.placed?[coul(t.pCoul).l+' '+fmt(a.dist)+' m'].concat(a.autres.map(q=>coul(q.c).l+' '+fmt(q.dist)+' m')).join(' / '):''};
 }
@@ -1979,7 +2137,7 @@ $('#lock-form').addEventListener('submit',async e=>{
 });
 function busy(){
   const a=document.activeElement;
-  return !!mode||altiRunning||phBusy||!!phOpen||!!(a&&a.closest&&a.closest('.detail,.settings,#acces,.parc'));
+  return !!mode||!!drag||altiRunning||phBusy||!!phOpen||!!(a&&a.closest&&a.closest('.detail,.settings,#acces,.parc'));
 }
 async function poll(){
   if(document.hidden) return;
@@ -2060,7 +2218,7 @@ function showPublie(){
     (state.targets.some(t=>t.cible)?'Enregistré sur cet appareil':'Inventaire du 08/11 chargé');
 }
 function fitPlaced(){
-  const pa=parcoursActif().id, pts=state.targets.filter(t=>t.parc===pa).flatMap(t=>[t.cible,t.pas].concat((t.autres||[]).map(q=>q.pos)).filter(Boolean));
+  const pa=parcoursActif().id, pts=state.targets.filter(t=>t.parc===pa&&!t.masquee).flatMap(t=>[t.cible,t.pas].concat((t.autres||[]).map(q=>q.pos)).filter(Boolean));
   if(pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.2),{maxZoom:19});
 }
 /* Donnees de reference publiees a cote de la page (terrain.json dans le depot GitHub).
