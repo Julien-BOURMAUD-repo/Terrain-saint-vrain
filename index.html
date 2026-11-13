@@ -222,7 +222,8 @@ body.tri-en-cours,body.tri-en-cours *{cursor:grabbing!important}
 .mk-envis{width:12px;height:12px;margin:2px;transform:rotate(45deg);border:2px dashed #fff;background:rgba(14,20,16,.45);box-sizing:border-box}
 .mk-parc{position:absolute;left:0;top:0;transform:translate(-50%,-50%);white-space:nowrap;font:600 12px/1 var(--f-num);color:#fff;background:rgba(40,16,60,.88);padding:3px 6px;border-radius:3px;border-left:3px solid #c77dff}
 .mk-perim{width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid #111}
-.mk-me{width:16px;height:16px;border-radius:50%;background:#1e88e5;border:3px solid #fff;box-shadow:0 0 0 2px rgba(0,0,0,.4)}
+.mk-me{width:16px;height:16px;border-radius:50%;background:#1e88e5;border:3px solid #fff;box-shadow:0 0 0 2px rgba(0,0,0,.4);animation:pouls 2s ease-out infinite}
+@keyframes pouls{0%{box-shadow:0 0 0 2px rgba(0,0,0,.4),0 0 0 0 rgba(30,136,229,.55)}100%{box-shadow:0 0 0 2px rgba(0,0,0,.4),0 0 0 14px rgba(30,136,229,0)}}
 
 .leaflet-container{font:13px var(--f-body)}
 
@@ -310,7 +311,7 @@ body.tri-en-cours,body.tri-en-cours *{cursor:grabbing!important}
       <input id="q" type="search" placeholder="Adresse, lieu ou coordonnées (48.54, 2.33)" autocomplete="off" aria-label="Rechercher un lieu">
       <ul id="results" class="results" hidden></ul>
     </div>
-    <button class="btn" id="btn-gps" type="button">Ma position</button>
+    <button class="btn" id="btn-gps" type="button" aria-pressed="false">Ma position</button>
     <button class="btn edit-only" id="btn-perim" type="button">Tracer le périmètre</button>
     <details class="menu" id="menu">
       <summary class="btn">Données</summary>
@@ -1125,9 +1126,28 @@ function showMe(pos){
   L.marker(ll,{icon:L.divIcon({className:'',html:'<div class="mk-me"></div>',iconSize:[16,16],iconAnchor:[8,8]}),interactive:false}).addTo(meLayer);
   return ll;
 }
-$('#btn-gps').addEventListener('click',async()=>{
-  try{const p=await gps();const ll=showMe(p);map.setView(ll,Math.max(map.getZoom(),18));toast('Précision : ±'+fmt(p.coords.accuracy,0)+' m');}
-  catch(e){toast(e.message);}
+/* Position de l'utilisateur suivie en continu : un appui active (et centre la carte), un second appui arrete */
+let suiviId=null, suiviPremier=false;
+function majBoutonPosition(on){
+  const b=$('#btn-gps'); b.classList.toggle('primary',on); b.setAttribute('aria-pressed',String(on));
+  b.textContent=on?'Position active':'Ma position';
+}
+function arreterSuivi(){
+  if(suiviId!=null&&navigator.geolocation) navigator.geolocation.clearWatch(suiviId);
+  suiviId=null; majBoutonPosition(false);
+  if(!(mode&&mode.type==='trace'&&mode.gps)) meLayer.clearLayers();
+}
+$('#btn-gps').addEventListener('click',()=>{
+  if(suiviId!=null){arreterSuivi();toast('Position masquée');return;}
+  if(!navigator.geolocation){toast('La géolocalisation n\'est pas disponible sur cet appareil.');return;}
+  suiviPremier=true; majBoutonPosition(true); toast('Recherche de la position...');
+  suiviId=navigator.geolocation.watchPosition(pos=>{
+    const ll=showMe(pos);
+    if(suiviPremier){suiviPremier=false; map.setView(ll,Math.max(map.getZoom(),18)); toast('Position trouvée à ±'+fmt(pos.coords.accuracy,0)+' m');}
+  },err=>{
+    if(err.code===1){toast('Accès à la position refusé dans le navigateur.');arreterSuivi();}
+    else if(suiviPremier) toast('Position introuvable pour l\'instant : réessayez à découvert.');
+  },{enableHighAccuracy:true,maximumAge:5000,timeout:30000});
 });
 async function gpsPlace(t,k,i){
   toast('Recherche de la position...');
