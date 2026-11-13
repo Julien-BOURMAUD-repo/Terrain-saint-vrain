@@ -204,12 +204,13 @@ body.tri-en-cours,body.tri-en-cours *{cursor:grabbing!important}
 .mk-cible{position:relative;width:var(--d);height:var(--d)}
 .mk-cible i{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle,#f6c90e 0 20%,#e2231a 20% 40%,#1e88e5 40% 60%,#111 60% 80%,#fff 80% 100%);box-shadow:0 0 0 2px rgba(0,0,0,.6),0 2px 6px rgba(0,0,0,.5)}
 .mk-cible.is-sel i{box-shadow:0 0 0 3px #ffd23f,0 0 0 5px rgba(0,0,0,.7)}
-.mk-cible b{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:#fff;font:800 14px/1 var(--f-num);white-space:nowrap;pointer-events:none;
+.mk-cible b{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:#fff;font:800 var(--f,14px)/1 var(--f-num);white-space:nowrap;pointer-events:none;
   text-shadow:0 0 2px #000,0 0 2px #000,0 0 3px #000,1px 1px 0 #000,-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000}
-.mk-cible b.long{font-size:11.5px}
-.mk-pas{width:22px;height:22px;display:grid;place-items:center}
-.mk-pas b{width:17px;height:17px;background:#fff;border:2px solid #111;transform:rotate(45deg);display:grid;place-items:center;box-shadow:0 1px 4px rgba(0,0,0,.5)}
+.mk-cible b.long{font-size:var(--fl,11.5px)}
+.mk-pas{width:var(--p,22px);height:var(--p,22px);display:grid;place-items:center}
+.mk-pas b{width:var(--pb,17px);height:var(--pb,17px);background:#fff;border:2px solid #111;transform:rotate(45deg);display:grid;place-items:center;box-shadow:0 1px 4px rgba(0,0,0,.5)}
 .mk-pas b span{transform:rotate(-45deg);font:700 10px/1 var(--f-num);color:#111}
+.mk-pas.mini b span{display:none}
 .mk-pas.is-sel b{box-shadow:0 0 0 3px #ffd23f,0 0 0 5px rgba(0,0,0,.6)}
 .mk-dist,.mk-ghost{position:absolute;left:0;top:0;transform:translate(-50%,-50%);white-space:nowrap;font:600 14px/1 var(--f-num);color:#fff;background:rgba(14,20,16,.86);padding:3px 7px;border-radius:3px;border-left:3px solid #3ddc84}
 .mk-dist.s-warn{border-left-color:#ff9f1c}
@@ -706,14 +707,22 @@ const meLayer=L.layerGroup().addTo(map);
 const layers={};
 
 function icCible(t){
-  const sz=numFirst(t.taille)||90, d=sz>=130?34:sz>=90?28:sz>=80?26:22;
+  /* Toutes les cibles ont la meme taille sur la carte, quelle que soit leur taille reelle ; plus petites de loin */
+  const T=tailleIcones(), d=T.d;
   /* Numero ecrit sur le blason ; "4 bis" devient "4b" comme sur les piquets */
   const num=shortN(t.n);
-  return L.divIcon({className:'',html:'<div class="mk-cible'+(sel===t.id?' is-sel':'')+'" style="--d:'+d+'px" title="Cible '+esc(t.n)+'"><i></i><b'+(String(num).length>2?' class="long"':'')+'>'+esc(num)+'</b></div>',iconSize:[d,d],iconAnchor:[d/2,d/2]});
+  return L.divIcon({className:'',html:'<div class="mk-cible'+(sel===t.id?' is-sel':'')+'" style="--d:'+d+'px;--f:'+T.f+'px;--fl:'+T.fl+'px" title="Cible '+esc(t.n)+'"><i></i><b'+(String(num).length>2?' class="long"':'')+'>'+esc(num)+'</b></div>',iconSize:[d,d],iconAnchor:[d/2,d/2]});
+}
+/* Taille des icones selon le zoom (identique pour toutes les cibles) */
+function tailleIcones(){
+  const z=presOn?18:map.getZoom();
+  if(z>=18) return {d:28,f:14,fl:11.5,p:22,pb:17,mini:false};
+  if(z>=17) return {d:22,f:11.5,fl:9.5,p:18,pb:13,mini:false};
+  return {d:17,f:9.5,fl:8,p:13,pb:9,mini:true};
 }
 function icPas(t,c){
-  const k=coul(c||t.pCoul);
-  return L.divIcon({className:'',html:'<div class="mk-pas'+(sel===t.id?' is-sel':'')+'"><b style="background:'+k.hex+'"><span style="color:'+k.txt+'">'+esc(shortN(t.n))+'</span></b></div>',iconSize:[22,22],iconAnchor:[11,11]});
+  const k=coul(c||t.pCoul), T=tailleIcones();
+  return L.divIcon({className:'',html:'<div class="mk-pas'+(sel===t.id?' is-sel':'')+(T.mini?' mini':'')+'" style="--p:'+T.p+'px;--pb:'+T.pb+'px"><b style="background:'+k.hex+'"><span style="color:'+k.txt+'">'+esc(shortN(t.n))+'</span></b></div>',iconSize:[T.p,T.p],iconAnchor:[T.p/2,T.p/2]});
 }
 let presOn=false;
 const presOpts={chemin:true,couloirs:true,protections:true,etiquettes:true,perimetre:true,notes:false};
@@ -824,7 +833,7 @@ function etiquettePiquet(pos,az,html,cls,coulHex,z,cote){
     interactive:false,keyboard:false,zIndexOffset:z||300});
 }
 let zoomCat=null;
-map.on('zoomend',()=>{const z=map.getZoom(), c=[z>=ZOOM_REPERES,z>=ZOOM_ENVIS,z>=ZOOM_DIST].join(); if(c!==zoomCat){zoomCat=c; redrawAll();}});
+map.on('zoomend',()=>{const z=map.getZoom(), c=[z>=17,z>=ZOOM_REPERES,z>=ZOOM_ENVIS,z>=ZOOM_DIST].join(); if(c!==zoomCat){zoomCat=c; redrawAll();}});
 
 function drawPerim(){
   perimLayer.clearLayers();
