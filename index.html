@@ -741,9 +741,12 @@ function ensure(t){
   if(!visibleOnMap(t)){dropLayers(t.id);return;}
   let ly=layers[t.id];
   if(!ly) ly=layers[t.id]={cible:null,pas:null,geo:L.layerGroup().addTo(map)};
+  /* De loin, seulement les cibles, les lignes et le chemin : les piquets apparaissent a partir du zoom 19
+     (toujours visibles pour la cible ouverte, pendant un placement et sur le plan) */
+  const voirPiquets=presOn||t.id===sel||!!(mode&&mode.id===t.id)||map.getZoom()>=ZOOM_PIQUETS;
   ['cible','pas'].forEach(k=>{
     const pos=t[k];
-    if(!pos){if(ly[k]){map.removeLayer(ly[k]);ly[k]=null;}return;}
+    if(!pos||(k==='pas'&&!voirPiquets)){if(ly[k]){map.removeLayer(ly[k]);ly[k]=null;}return;}
     const icon=k==='cible'?icCible(t):icPas(t);
     if(!ly[k]){
       const m=L.marker(pos,{draggable:canEdit(),icon:icon,keyboard:false,zIndexOffset:k==='cible'?600:500,
@@ -756,7 +759,7 @@ function ensure(t){
   });
   /* Piquets supplementaires : recrees a chaque mise a jour (au plus 3) */
   (ly.autres||[]).forEach(m=>map.removeLayer(m)); ly.autres=[];
-  if(t.cible||t.pas) (t.autres||[]).forEach(q=>{
+  if((t.cible||t.pas)&&voirPiquets) (t.autres||[]).forEach(q=>{
     if(!q.pos) return;
     const m=L.marker(q.pos,{draggable:canEdit(),icon:icPas(t,q.c),keyboard:false,zIndexOffset:490,title:'Piquet '+coul(q.c).l.toLowerCase()+' cible '+t.n}).addTo(map);
     m.on('click',()=>{if(!mode) select(t.id,false);});
@@ -823,7 +826,7 @@ function redrawAll(){state.targets.forEach(ensure);}
 /* Distances : affichees a partir du zoom 18 (ou pour la cible ouverte, ou sur le plan si la case est cochee),
    a cote du piquet (pas principal a droite du tireur, piquets suivants en alternance gauche / droite) */
 /* Niveaux de detail selon le zoom : distances seulement de tres pres (20 et plus, le zoom maximal est 21) */
-const ZOOM_DIST=20, ZOOM_ENVIS=19, ZOOM_REPERES=18;
+const ZOOM_DIST=20, ZOOM_ENVIS=19, ZOOM_REPERES=19, ZOOM_PIQUETS=19;
 function distVisibles(isSel){return P('etiquettes')&&(isSel||presOn||map.getZoom()>=ZOOM_DIST);}
 function etiquettePiquet(pos,az,html,cls,coulHex,z,cote){
   const k=cote===-1?-1:1, r=az*D2R, rx=Math.cos(r)*k, ry=Math.sin(r)*k, R=24+24*Math.abs(rx);
