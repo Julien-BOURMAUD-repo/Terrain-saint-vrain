@@ -784,7 +784,7 @@ function drawGeo(t){
     L.polyline(a.protLine,{pane:'prot',renderer:protRenderer,color:MAPC.prot,weight:isSel?7:5,opacity:1,lineCap:'butt',interactive:false}).addTo(g);
   }
   /* Distance envisagee : un piquet en pointilles a l'endroit vise, avec seulement la distance */
-  if(a.ghost&&P('notes')){
+  if(a.ghost&&P('notes')&&(isSel||presOn||map.getZoom()>=ZOOM_ENVIS)){
     const gc=a.envPossible===false?MAPC.bad:'#ffffff';
     L.polyline([t.pas,a.ghost],{color:gc,weight:1.5,dashArray:'2 6',opacity:.8,interactive:false}).addTo(g);
     L.marker(a.ghost,{icon:L.divIcon({className:'',html:'<div class="mk-envis" style="border-color:'+gc+'"></div>',iconSize:[16,16],iconAnchor:[8,8]}),interactive:false,keyboard:false,zIndexOffset:150}).addTo(g);
@@ -809,7 +809,8 @@ function drawGeo(t){
 function redrawAll(){state.targets.forEach(ensure);}
 /* Distances : affichees a partir du zoom 18 (ou pour la cible ouverte, ou sur le plan si la case est cochee),
    a cote du piquet (pas principal a droite du tireur, piquets suivants en alternance gauche / droite) */
-const ZOOM_DIST=18;
+/* Niveaux de detail selon le zoom : distances seulement de tres pres (20 et plus, le zoom maximal est 21) */
+const ZOOM_DIST=20, ZOOM_ENVIS=19, ZOOM_REPERES=18;
 function distVisibles(isSel){return P('etiquettes')&&(isSel||presOn||map.getZoom()>=ZOOM_DIST);}
 function etiquettePiquet(pos,az,html,cls,coulHex,z,cote){
   const k=cote===-1?-1:1, r=az*D2R, rx=Math.cos(r)*k, ry=Math.sin(r)*k, R=24+24*Math.abs(rx);
@@ -819,7 +820,7 @@ function etiquettePiquet(pos,az,html,cls,coulHex,z,cote){
     interactive:false,keyboard:false,zIndexOffset:z||300});
 }
 let zoomCat=null;
-map.on('zoomend',()=>{const c=map.getZoom()>=ZOOM_DIST; if(c!==zoomCat){zoomCat=c; redrawAll();}});
+map.on('zoomend',()=>{const z=map.getZoom(), c=[z>=ZOOM_REPERES,z>=ZOOM_ENVIS,z>=ZOOM_DIST].join(); if(c!==zoomCat){zoomCat=c; redrawAll();}});
 
 function drawPerim(){
   perimLayer.clearLayers();
@@ -901,12 +902,13 @@ function drawParcours(){
     const plein=enCours||!!(q.via[sg.key]&&q.via[sg.key].length);
     L.polyline(pts,{color:'#000',weight:6,opacity:.35,interactive:false}).addTo(parcLayer);
     L.polyline(pts,{color:MAPC.parc,weight:3,opacity:1,dashArray:plein?null:'6 6',interactive:false}).addTo(parcLayer);
-    if(z>=18||enCours) label(midOf(pts),'<div class="mk-parc">'+esc(sg.A.n)+' → '+esc(sg.B.n)+' · '+fmt(pathLen(pts),0)+' m</div>',150).addTo(parcLayer);
+    if((z>=ZOOM_DIST&&!presOn)||enCours) label(midOf(pts),'<div class="mk-parc">'+esc(sg.A.n)+' → '+esc(sg.B.n)+' · '+fmt(pathLen(pts),0)+' m</div>',150).addTo(parcLayer);
     if(enCours) mode.pts.forEach(v=>L.marker(v,{icon:L.divIcon({className:'',html:'<div class="mk-perim"></div>',iconSize:[10,10],iconAnchor:[5,5]}),interactive:false}).addTo(parcLayer));
   }
   const A=byId(vis[0]), B=byId(vis[vis.length-1]);
-  if(A&&(A.pas||A.cible)&&vis.length>1) label(A.pas||A.cible,'<div class="mk-parc" style="transform:translate(-50%,-160%)">Départ</div>',160).addTo(parcLayer);
-  if(B&&(B.cible||B.pas)&&vis.length>1) label(B.cible||B.pas,'<div class="mk-parc" style="transform:translate(-50%,-190%)">Arrivée</div>',160).addTo(parcLayer);
+  const reperes=presOn||z>=ZOOM_REPERES;
+  if(reperes&&A&&(A.pas||A.cible)&&vis.length>1) label(A.pas||A.cible,'<div class="mk-parc" style="transform:translate(-50%,-160%)">Départ</div>',160).addTo(parcLayer);
+  if(reperes&&B&&(B.cible||B.pas)&&vis.length>1) label(B.cible||B.pas,'<div class="mk-parc" style="transform:translate(-50%,-190%)">Arrivée</div>',160).addTo(parcLayer);
 }
 map.on('zoomend',drawParcours);
 
