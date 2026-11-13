@@ -213,6 +213,10 @@ body.tri-en-cours,body.tri-en-cours *{cursor:grabbing!important}
 .mk-dist.s-warn{border-left-color:#ff9f1c}
 .mk-dist.s-bad{border-left-color:#ff4d3d}
 .mk-ghost{background:rgba(14,20,16,.7);border-left:3px dashed #ffd23f;font-weight:500}
+.mk-cote{position:absolute;left:0;top:0;white-space:nowrap;font:600 14px/1 var(--f-num);color:#fff;background:rgba(14,20,16,.9);padding:4px 7px;border-radius:3px;border-left:4px solid #3ddc84;box-shadow:0 1px 4px rgba(0,0,0,.45);font-variant-numeric:tabular-nums}
+.mk-cote.warn{box-shadow:0 0 0 2px #ff9f1c,0 1px 4px rgba(0,0,0,.45)}
+.mk-cote.envis{background:rgba(14,20,16,.72);border-left-style:dashed;font-weight:500}
+.mk-envis{width:12px;height:12px;margin:2px;transform:rotate(45deg);border:2px dashed #fff;background:rgba(14,20,16,.45);box-sizing:border-box}
 .mk-parc{position:absolute;left:0;top:0;transform:translate(-50%,-50%);white-space:nowrap;font:600 12px/1 var(--f-num);color:#fff;background:rgba(40,16,60,.88);padding:3px 6px;border-radius:3px;border-left:3px solid #c77dff}
 .mk-perim{width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid #111}
 .mk-me{width:16px;height:16px;border-radius:50%;background:#1e88e5;border:3px solid #fff;box-shadow:0 0 0 2px rgba(0,0,0,.4)}
@@ -774,20 +778,21 @@ function drawGeo(t){
   if(P('couloirs')&&a.trajLen>0){
     L.polyline([t.cible,a.trajEnd],{color:'#000',weight:isSel?6:4,opacity:.3,dashArray:'10 6',interactive:false}).addTo(g);
     L.polyline([t.cible,a.trajEnd],{color:tcol,weight:isSel?3:2,opacity:1,dashArray:'10 6',interactive:false}).addTo(g);
-    label(a.trajEnd,'<div class="mk-dist s-'+(a.trajHors?'bad':'ok')+'">+'+fmt(a.trajLen,0)+' m</div>',250).addTo(g);
   }
   if(P('protections')&&a.protLine){
     L.polyline(a.protLine,{pane:'prot',renderer:protRenderer,color:'#000',weight:isSel?11:9,opacity:.7,lineCap:'butt',interactive:false}).addTo(g);
     L.polyline(a.protLine,{pane:'prot',renderer:protRenderer,color:MAPC.prot,weight:isSel?7:5,opacity:1,lineCap:'butt',interactive:false}).addTo(g);
   }
+  /* Distance envisagee : un piquet en pointilles a l'endroit vise, avec seulement la distance */
   if(a.ghost&&P('notes')){
-    L.polyline([t.pas,a.ghost],{color:a.envPossible===false?MAPC.bad:col,weight:2,dashArray:'2 7',opacity:.95,interactive:false}).addTo(g);
-    label(a.ghost,'<div class="mk-ghost">'+fmt(a.dEnv,0)+' m envisagé</div>',200).addTo(g);
+    const gc=a.envPossible===false?MAPC.bad:'#ffffff';
+    L.polyline([t.pas,a.ghost],{color:gc,weight:1.5,dashArray:'2 6',opacity:.8,interactive:false}).addTo(g);
+    L.marker(a.ghost,{icon:L.divIcon({className:'',html:'<div class="mk-envis" style="border-color:'+gc+'"></div>',iconSize:[16,16],iconAnchor:[8,8]}),interactive:false,keyboard:false,zIndexOffset:150}).addTo(g);
+    if(distVisibles(isSel)) etiquettePiquet(a.ghost,a.az,fmt(a.dEnv,0)+' m','envis',gc,200).addTo(g);
   }
   L.polyline([t.pas,t.cible],{color:'#000',weight:isSel?7:5,opacity:.35,interactive:false}).addTo(g);
   L.polyline([t.pas,t.cible],{color:col,weight:isSel?4:3,opacity:1,interactive:false}).addTo(g);
-  const mid=[(t.pas[0]+t.cible[0])/2,(t.pas[1]+t.cible[1])/2];
-  label(mid,'<div class="mk-dist s-'+(axisWarn?'warn':'ok')+'">'+fmt(a.dist)+' m</div>',300).addTo(g);
+  if(distVisibles(isSel)) etiquettePiquet(t.pas,a.az,fmt(a.dist)+' m',axisWarn?'warn':'',coul(t.pCoul).hex,300).addTo(g);
   /* Piquets supplementaires : meme representation, la couleur du piquet sur l'etiquette de distance */
   a.autres.forEach(q=>{
     const qc=q.trajHors?MAPC.bad:MAPC.axis;
@@ -798,10 +803,23 @@ function drawGeo(t){
     if(P('couloirs')&&a.trajLen>0) L.polyline([t.cible,q.trajEnd],{color:qc,weight:isSel?3:2,opacity:.9,dashArray:'10 6',interactive:false}).addTo(g);
     L.polyline([q.pos,t.cible],{color:'#000',weight:isSel?6:4,opacity:.3,interactive:false}).addTo(g);
     L.polyline([q.pos,t.cible],{color:MAPC.axis,weight:isSel?3:2,opacity:1,interactive:false}).addTo(g);
-    label([(q.pos[0]+t.cible[0])/2,(q.pos[1]+t.cible[1])/2],'<div class="mk-dist" style="border-left-color:'+coul(q.c).hex+'">'+fmt(q.dist)+' m</div>',290).addTo(g);
+    if(distVisibles(isSel)) etiquettePiquet(q.pos,q.az,fmt(q.dist)+' m','',coul(q.c).hex,290,q.i%2===0?-1:1).addTo(g);
   });
 }
 function redrawAll(){state.targets.forEach(ensure);}
+/* Distances : affichees a partir du zoom 18 (ou pour la cible ouverte, ou sur le plan si la case est cochee),
+   a cote du piquet (pas principal a droite du tireur, piquets suivants en alternance gauche / droite) */
+const ZOOM_DIST=18;
+function distVisibles(isSel){return P('etiquettes')&&(isSel||presOn||map.getZoom()>=ZOOM_DIST);}
+function etiquettePiquet(pos,az,html,cls,coulHex,z,cote){
+  const k=cote===-1?-1:1, r=az*D2R, rx=Math.cos(r)*k, ry=Math.sin(r)*k, R=24+24*Math.abs(rx);
+  const ox=Math.round(rx*R), oy=Math.round(ry*R);
+  return L.marker(pos,{icon:L.divIcon({className:'',iconSize:null,
+    html:'<div class="mk-cote'+(cls?' '+cls:'')+'" style="transform:translate(calc(-50% + '+ox+'px),calc(-50% + '+oy+'px));border-left-color:'+coulHex+'">'+html+'</div>'}),
+    interactive:false,keyboard:false,zIndexOffset:z||300});
+}
+let zoomCat=null;
+map.on('zoomend',()=>{const c=map.getZoom()>=ZOOM_DIST; if(c!==zoomCat){zoomCat=c; redrawAll();}});
 
 function drawPerim(){
   perimLayer.clearLayers();
