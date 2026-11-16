@@ -397,6 +397,7 @@ body.tri-en-cours,body.tri-en-cours *{cursor:grabbing!important}
   <div class="mapwrap">
     <div id="map"></div>
     <div class="banner" id="banner" hidden></div>
+    <div class="banner" id="mesure" hidden aria-live="polite"></div>
   </div>
 </div>
 <div id="pres" hidden>
@@ -1128,10 +1129,12 @@ function showMe(pos){
 }
 /* Position de l'utilisateur suivie en continu : un appui active (et centre la carte), un second appui arrete */
 let suiviId=null, suiviPremier=false;
-function majBoutonPosition(on){
+function majBoutonPosition(on,acc){
   const b=$('#btn-gps'); b.classList.toggle('primary',on); b.setAttribute('aria-pressed',String(on));
-  b.textContent=on?'Position active':'Ma position';
+  b.textContent=on?'Position active'+(acc!=null?' ±'+fmt(acc,0)+' m':''):'Ma position';
 }
+/* Point bleu : un releve beaucoup moins precis que le dernier bon releve recent est ignore (saut parasite) */
+let dernierBon=null;
 function arreterSuivi(){
   if(suiviId!=null&&navigator.geolocation) navigator.geolocation.clearWatch(suiviId);
   suiviId=null; majBoutonPosition(false);
@@ -1141,20 +1144,74 @@ $('#btn-gps').addEventListener('click',()=>{
   if(suiviId!=null){arreterSuivi();toast('Position masquée');return;}
   if(!navigator.geolocation){toast('La géolocalisation n\'est pas disponible sur cet appareil.');return;}
   suiviPremier=true; majBoutonPosition(true); toast('Recherche de la position...');
+  dernierBon=null;
   suiviId=navigator.geolocation.watchPosition(pos=>{
-    const ll=showMe(pos);
+    const acc=pos.coords.accuracy||50, now=Date.now();
+    if(dernierBon&&now-dernierBon.t<20000&&acc>Math.max(30,dernierBon.acc*3)) return;
+    if(!dernierBon||acc<=dernierBon.acc*1.5||now-dernierBon.t>5000) dernierBon={t:now,acc:acc};
+    const ll=showMe(pos); majBoutonPosition(true,acc);
     if(suiviPremier){suiviPremier=false; map.setView(ll,Math.max(map.getZoom(),18)); toast('Position trouvée à ±'+fmt(pos.coords.accuracy,0)+' m');}
   },err=>{
     if(err.code===1){toast('Accès à la position refusé dans le navigateur.');arreterSuivi();}
     else if(suiviPremier) toast('Position introuvable pour l\'instant : réessayez à découvert.');
   },{enableHighAccuracy:true,maximumAge:5000,timeout:30000});
 });
+/* ---------- Mesure GPS moyennee ----------
+   Pour placer un element au GPS : plusieurs releves pendant quelques secondes, les moins precis ecartes,
+   les autres ponderes par leur precision (1/precision²), puis rejet des releves trop eloignes de la moyenne. */
+const MESURE_DUREE=15000;
+let mesure=null;
+function moyenneGPS(pts){
+  if(!pts.length) return null;
+  const best=Math.min.apply(null,pts.map(p=>p.acc));
+  let keep=pts.filter(p=>p.acc<=Math.max(25,best*2));
+  const moy=ks=>{let sw=0,la=0,lo=0; ks.forEach(p=>{const w=1/(p.acc*p.acc); sw+=w; la+=p.ll[0]*w; lo+=p.ll[1]*w;}); return [la/sw,lo/sw];};
+  let c=moy(keep);
+  const k2=keep.filter(p=>dist(p.ll,c)<=Math.max(2*p.acc,3));
+  if(k2.length){keep=k2; c=moy(keep);}
+  /* Les erreurs successives d'un GPS sont liees entre elles : on n'annonce qu'un gain modeste */
+  const accMoy=keep.reduce((sum,p)=>sum+p.acc,0)/keep.length;
+  return {ll:c,acc:Math.max(1,Math.min(best,accMoy/Math.sqrt(Math.min(keep.length,4)))),n:keep.length};
+}
+function mesurerPosition(duree){
+  return new Promise((resolve,reject)=>{
+    if(!navigator.geolocation) return reject(new Error('La géolocalisation n\'est pas disponible sur cet appareil.'));
+    if(mesure) mesure.finir(false,'Mesure annulée');
+    const box=$('#mesure'), st={pts:[],t0:Date.now()};
+    const finir=(ok,msg)=>{
+      if(mesure!==ctrl) return; mesure=null;
+      navigator.geolocation.clearWatch(st.id); clearInterval(st.tick); box.hidden=true;
+      const r=moyenneGPS(st.pts);
+      if(!ok) return reject(new Error(msg||'Mesure annulée'));
+      if(!r) return reject(new Error('Aucune position reçue : réessayez à découvert.'));
+      resolve(r);
+    };
+    const maj=()=>{
+      const r=moyenneGPS(st.pts), ecoule=Date.now()-st.t0, reste=Math.max(0,Math.ceil((duree-ecoule)/1000));
+      box.innerHTML='<span>Mesure GPS, restez immobile : '+(r?r.n+' relevé'+(r.n>1?'s':'')+', précision ±'+fmt(r.acc,0)+' m':'recherche du signal...')+(reste?' · '+reste+' s':'')+'</span>'+
+        '<button class="btn small primary" data-m="ok" type="button"'+(r?'':' disabled')+'>Valider maintenant</button>'+
+        '<button class="btn small" data-m="annuler" type="button">Annuler</button>';
+      if(r&&(ecoule>=duree||(r.n>=8&&r.acc<=2))) finir(true);
+      else if(!r&&ecoule>=duree*2) finir(true);
+    };
+    const ctrl={finir:finir}; mesure=ctrl; box.hidden=false; maj();
+    st.id=navigator.geolocation.watchPosition(pos=>{
+      st.pts.push({ll:[pos.coords.latitude,pos.coords.longitude],acc:pos.coords.accuracy||50}); showMe(pos); maj();
+    },err=>{if(err.code===1) finir(false,'Accès à la position refusé dans le navigateur.');},{enableHighAccuracy:true,maximumAge:0,timeout:20000});
+    st.tick=setInterval(maj,500);
+  });
+}
+$('#mesure').addEventListener('click',e=>{
+  const b=e.target.closest('[data-m]'); if(!b||!mesure) return;
+  if(b.dataset.m==='ok') mesure.finir(true); else mesure.finir(false,'Mesure annulée');
+});
 async function gpsPlace(t,k,i){
-  toast('Recherche de la position...');
-  try{const p=await gps();const ll=showMe(p);
+  try{
+    const r=await mesurerPosition(MESURE_DUREE), ll=r.ll;
     if(k==='autre') placeAutre(t,i,null,ll); else placeAt(t,k,ll);
-    map.panTo(ll);toast((k==='cible'?'Cible':k==='autre'?'Piquet':'Pas de tir')+' placé à ±'+fmt(p.coords.accuracy,0)+' m');}
-  catch(e){toast(e.message);}
+    map.panTo(ll);
+    toast((k==='cible'?'Cible':k==='autre'?'Piquet':'Pas de tir')+' placé à ±'+fmt(r.acc,0)+' m (moyenne de '+r.n+' relevé'+(r.n>1?'s':'')+')');
+  }catch(e){toast(e.message);}
 }
 
 /* ---------- Recherche de lieu (geocodage IGN) ---------- */
